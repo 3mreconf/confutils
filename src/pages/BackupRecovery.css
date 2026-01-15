@@ -1,0 +1,250 @@
+.backup-recovery-page {
+  padding: 0;
+}
+
+.backup-actions {
+  margin-bottom: 32px;
+}
+
+.restore-points-section {
+  margin-bottom: 32px;
+}
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.section-header h3 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.refresh-btn {
+  padding: 12px 20px;
+  min-width: 100px;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: opacity var(--transition-fast);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 0.875rem;
+  white-space: nowrap;
+}
+
+.refresh-btn:hover:not(:disabled) {
+  background: var(--bg-secondary);
+  border-color: var(--accent-cyan);
+}
+
+.refresh-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.spinning {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.loading-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  color: var(--text-secondary);
+}
+
+.loading-state svg {
+  animation: spin 1s linear infinite;
+  color: var(--accent-cyan);
+}
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.empty-state svg {
+  margin-bottom: 16px;
+  opacity: 0.5;
+}
+
+.empty-hint {
+  font-size: 0.875rem;
+  margin-top: 8px;
+  opacity: 0.7;
+}
+
+.restore-points-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.restore-point-item {
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  backdrop-filter: blur(20px);
+  transition: all var(--transition-fast);
+}
+
+.restore-point-item:hover {
+  border-color: var(--accent-cyan);
+  box-shadow: 0 4px 12px rgba(0, 255, 255, 0.1);
+}
+
+.restore-point-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.restore-point-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.restore-point-header h4 {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+  flex: 1;
+}
+
+.restore-point-type {
+  font-size: 0.75rem;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  background: rgba(0, 255, 255, 0.1);
+  color: var(--accent-cyan);
+  white-space: nowrap;
+}
+
+.restore-point-details {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.detail-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+.restore-point-actions {
+  display: flex;
+  gap: 8px;
+  margin-left: 16px;
+}
+
+.action-btn {
+  padding: 12px 20px;
+  min-width: 120px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--glass-border);
+  background: var(--glass-bg);
+  color: var(--text-primary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: opacity var(--transition-fast);
+  font-size: 0.875rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.action-btn:hover {
+  opacity: 0.8;
+}
+
+.restore-btn {
+  border-color: var(--status-warning);
+  color: var(--status-warning);
+}
+
+.restore-btn:hover {
+  border-color: var(--status-warning);
+  background: rgba(245, 158, 11, 0.1);
+}
+
+.delete-btn {
+  border-color: var(--status-error);
+  color: var(--status-error);
+}
+
+.delete-btn:hover {
+  border-color: var(--status-error);
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.backup-info {
+  margin-top: 32px;
+}
+
+.info-card {
+  background: var(--glass-bg);
+  border: 1px solid var(--status-warning);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  display: flex;
+  gap: 16px;
+  backdrop-filter: blur(20px);
+}
+
+.info-card svg {
+  color: var(--status-warning);
+  flex-shrink: 0;
+  margin-top: 4px;
+}
+
+.info-card h4 {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 12px 0;
+}
+
+.info-card ul {
+  margin: 0;
+  padding-left: 20px;
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+  line-height: 1.6;
+}
+
+.info-card li {
+  margin-bottom: 8px;
+}
+

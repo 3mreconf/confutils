@@ -1,0 +1,183 @@
+.custom-select {
+  position: relative;
+  flex: 1;
+}
+
+.custom-select-trigger {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  outline: none;
+  position: relative;
+  overflow: hidden;
+}
+
+.custom-select-trigger::before {
+  content: none;
+}
+
+.custom-select-trigger:hover::before {
+  left: 0;
+}
+
+.custom-select-trigger:hover {
+  border-color: #3a4048;
+  background: #1a1f26;
+}
+
+.custom-select-trigger.open {
+  border-color: #3a4048;
+  background: #1a1f26;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.06);
+}
+
+.custom-select-trigger:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.custom-select.disabled .custom-select-trigger:hover {
+  transform: none;
+  box-shadow: none;
+}
+
+.custom-select-value {
+  flex: 1;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.custom-select-arrow {
+  color: var(--text-secondary);
+  transition: transform 0.2s ease;
+  flex-shrink: 0;
+}
+
+.custom-select-arrow.rotated {
+  transform: rotate(180deg);
+}
+
+.custom-select-dropdown {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+  z-index: 999999;
+  overflow: hidden;
+  animation: slideDown 0.2s ease;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.custom-select-option {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid rgba(0, 255, 255, 0.1);
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: left;
+  position: relative;
+  overflow: hidden;
+}
+
+.custom-select-option:last-child {
+  border-bottom: none;
+}
+
+.custom-select-option::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: linear-gradient(180deg, var(--accent-cyan), var(--accent-purple));
+  transform: scaleY(0);
+  transition: transform 0.2s ease;
+}
+
+.custom-select-option:hover {
+  background: linear-gradient(90deg,
+    rgba(0, 255, 255, 0.08),
+    rgba(139, 92, 246, 0.08)
+  );
+  color: var(--accent-cyan);
+  padding-left: 20px;
+}
+
+.custom-select-option:hover::before {
+  transform: scaleY(1);
+}
+
+.custom-select-option.selected {
+  background: linear-gradient(90deg,
+    rgba(0, 255, 255, 0.15),
+    rgba(139, 92, 246, 0.15)
+  );
+  color: var(--accent-cyan);
+  font-weight: 600;
+  padding-left: 20px;
+}
+
+.custom-select-option.selected::before {
+  transform: scaleY(1);
+}
+
+.option-label {
+  flex: 1;
+}
+
+.option-indicator {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--accent-cyan), var(--accent-purple));
+  box-shadow: 0 0 12px var(--accent-cyan);
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.7;
+    transform: scale(1.2);
+  }
+}

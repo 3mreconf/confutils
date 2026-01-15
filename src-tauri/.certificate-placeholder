@@ -1,0 +1,11 @@
+# Sertifika Dosyası Yeri
+# 
+# Bu dosya sertifika dosyasının nereye konulacağını gösterir.
+# 
+# Sertifika dosyanızı (certificate.pfx) aşağıdaki konumlardan birine koyun:
+# 1. src-tauri/certificate.pfx (önerilen)
+# 2. certificate.pfx (proje root)
+# 
+# Build sistemi otomatik olarak bu konumlarda sertifika arayacaktır.
+# 
+# NOT: Sertifika dosyası .gitignore'da olduğu için commit edilmeyecektir.

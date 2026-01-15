@@ -1,0 +1,221 @@
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(10, 14, 23, 0.90);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  padding: 16px;
+  animation: fadeIn 0.25s ease-out;
+  overflow-y: auto;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.modal-content {
+  background: linear-gradient(135deg, rgba(15, 20, 25, 0.98), rgba(20, 25, 35, 0.98));
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-radius: 20px;
+  border: 1px solid rgba(0, 255, 255, 0.25);
+  box-shadow:
+    0 24px 80px rgba(0, 0, 0, 0.6),
+    0 0 0 1px rgba(255, 255, 255, 0.08),
+    0 0 60px rgba(0, 255, 255, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  max-height: calc(100vh - 32px);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  animation: slideUp 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+  position: relative;
+  margin: auto;
+}
+
+.modal-content::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg,
+    transparent,
+    rgba(0, 255, 255, 0.5) 50%,
+    transparent
+  );
+  animation: shimmer 2s infinite;
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes shimmer {
+  0%, 100% {
+    opacity: 0;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.modal-small {
+  width: 100%;
+  max-width: 400px;
+}
+
+.modal-medium {
+  width: 100%;
+  max-width: 600px;
+}
+
+.modal-large {
+  width: 100%;
+  max-width: 800px;
+}
+
+.modal-header {
+  padding: 24px 28px;
+  border-bottom: 1px solid rgba(0, 255, 255, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: rgba(0, 255, 255, 0.03);
+}
+
+.modal-title {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #e8eaed;
+  margin: 0;
+  background: linear-gradient(135deg, #00ffff, #00ccff);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.modal-close-btn {
+  background: rgba(0, 255, 255, 0.1);
+  border: 1px solid rgba(0, 255, 255, 0.2);
+  border-radius: 8px;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  color: #00ffff;
+}
+
+.modal-close-btn:hover {
+  background: rgba(0, 255, 255, 0.2);
+  border-color: rgba(0, 255, 255, 0.4);
+  transform: rotate(90deg);
+  box-shadow: 0 0 20px rgba(0, 255, 255, 0.3);
+}
+
+.modal-body {
+  padding: 24px 28px 28px 28px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  flex: 1;
+  min-height: 0;
+  scroll-behavior: smooth;
+}
+
+.modal-body::-webkit-scrollbar {
+  width: 10px;
+}
+
+.modal-body::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 5px;
+  margin: 4px 0;
+}
+
+.modal-body::-webkit-scrollbar-thumb {
+  background: linear-gradient(135deg, rgba(0, 255, 255, 0.3), rgba(0, 204, 255, 0.3));
+  border-radius: 5px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+  transition: all 0.2s;
+}
+
+.modal-body::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(135deg, rgba(0, 255, 255, 0.5), rgba(0, 204, 255, 0.5));
+  background-clip: padding-box;
+}
+
+.modal-body::-webkit-scrollbar-thumb:active {
+  background: linear-gradient(135deg, rgba(0, 255, 255, 0.7), rgba(0, 204, 255, 0.7));
+  background-clip: padding-box;
+}
+
+
+@media (max-width: 768px) {
+  .modal-overlay {
+    padding: 8px;
+    align-items: flex-start;
+  }
+
+  .modal-content {
+    max-height: calc(100vh - 16px);
+    border-radius: 16px;
+    margin-top: 8px;
+    margin-bottom: 8px;
+  }
+
+  .modal-header {
+    padding: 20px 20px;
+  }
+
+  .modal-title {
+    font-size: 1.25rem;
+  }
+
+  .modal-body {
+    padding: 20px;
+  }
+
+  .modal-small,
+  .modal-medium,
+  .modal-large {
+    max-width: 100%;
+  }
+}
+
+@media (max-height: 600px) {
+  .modal-content {
+    max-height: calc(100vh - 16px);
+  }
+
+  .modal-header {
+    padding: 16px 24px;
+  }
+
+  .modal-body {
+    padding: 16px 24px 24px 24px;
+  }
+}

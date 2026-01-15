@@ -1,0 +1,42 @@
+[package]
+name = "confutils"
+version = "2.0.0"
+description = "Modern Windows Utilities"
+authors = ["emreconf <3mreconf@gmail.com>"]
+license = "MIT"
+repository = "https://github.com/3mreconf/confutils"
+edition = "2021"
+
+[build-dependencies]
+tauri-build = { version = "2.0", features = [] }
+
+[dependencies]
+tauri = { version = "2.2", features = ["tray-icon"] }
+tauri-plugin-shell = { version = "2", features = [] }
+tauri-plugin-dialog = "2.0"
+tauri-plugin-single-instance = "2.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+winreg = "0.52"
+reqwest = { version = "0.11", features = ["json"] }
+tokio = { version = "1", features = ["full"] }
+base64 = "0.22"
+lazy_static = "1.4"
+chrono = "0.4"
+sysinfo = "0.31"
+sha2 = "0.10"
+obfstr = "0.4"
+native-dialog = "0.7"
+discord-rich-presence = "0.2"
+rand = "0.8"
+
+[target.'cfg(windows)'.dependencies]
+winapi = { version = "0.3", features = ["debugapi", "processthreadsapi", "winnt"] }
+
+[profile.release]
+panic = "abort"
+codegen-units = 1
+lto = "fat"
+opt-level = "z"
+strip = true
+debug = false

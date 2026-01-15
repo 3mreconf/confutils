@@ -1,0 +1,58 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+*.local
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Tauri
+src-tauri/target
+src-tauri/Cargo.lock
+
+# Keys (IMPORTANT - Never commit private keys!)
+*.key
+*.key.pub
+*.priv
+src-tauri/*.key
+src-tauri/*.key.pub
+src-tauri/*.priv
+
+# Certificates (IMPORTANT - Never commit certificates!)
+*.pfx
+*.p12
+*.cer
+*.crt
+*.pem
+src-tauri/*.pfx
+src-tauri/*.p12
+src-tauri/*.cer
+src-tauri/*.crt
+src-tauri/*.pem
+certificate.pfx
+certificate.p12
+certificate-info.txt
+
+# Build artifacts
+*.msi
+*.exe
+*.dmg
+*.deb
+*.AppImage
