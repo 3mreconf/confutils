@@ -6,6 +6,7 @@ import { useModal } from '../../contexts/ModalContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { grabDiscordAvatar } from '../../utils/tauri';
 import { maskToken } from '../../utils/discordToken';
+import { navigateToSettingsSection } from '../../utils/navigation';
 import './MessageClonerModal.css';
 
 interface AvatarGrabberModalProps {
@@ -15,7 +16,7 @@ interface AvatarGrabberModalProps {
 export const AvatarGrabberModal: React.FC<AvatarGrabberModalProps> = ({ modalId }) => {
   const { t } = useLanguage();
   const { showNotification } = useNotification();
-  const { updateModalStatus } = useModal();
+  const { updateModalStatus, closeModal } = useModal();
   const { discordUserToken, discordUserTokens, setActiveDiscordUserToken } = useAuth();
 
   const [userToken, setUserToken] = useState('');
@@ -29,6 +30,13 @@ export const AvatarGrabberModal: React.FC<AvatarGrabberModalProps> = ({ modalId 
       setUserToken(discordUserToken);
     }
   }, [discordUserToken]);
+
+  const handleTokenRedirect = () => {
+    if (!discordUserToken) {
+      closeModal(modalId);
+      navigateToSettingsSection('discord-token-settings');
+    }
+  };
 
   const handleGrabAvatar = async () => {
     if (!userToken) {
@@ -105,6 +113,8 @@ export const AvatarGrabberModal: React.FC<AvatarGrabberModalProps> = ({ modalId 
             placeholder={discordUserToken ? t('discord_saved_token_placeholder') : t('discord_user_token_placeholder')}
             className="input-field"
             readOnly
+            onClick={handleTokenRedirect}
+            onFocus={handleTokenRedirect}
           />
         </div>
 

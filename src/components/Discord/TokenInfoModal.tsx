@@ -6,6 +6,7 @@ import { useModal } from '../../contexts/ModalContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { getDiscordTokenInfo } from '../../utils/tauri';
 import { maskToken } from '../../utils/discordToken';
+import { navigateToSettingsSection } from '../../utils/navigation';
 import { FormInput, ActionButton } from './common';
 import { validateToken } from './utils';
 import './MessageClonerModal.css';
@@ -31,7 +32,7 @@ interface TokenInfoModalProps {
 export const TokenInfoModal: React.FC<TokenInfoModalProps> = ({ modalId }) => {
   const { t } = useLanguage();
   const { showNotification } = useNotification();
-  const { updateModalStatus } = useModal();
+  const { updateModalStatus, closeModal } = useModal();
   const { discordUserToken, discordUserTokens, setActiveDiscordUserToken } = useAuth();
 
   const [userToken, setUserToken] = useState('');
@@ -44,6 +45,13 @@ export const TokenInfoModal: React.FC<TokenInfoModalProps> = ({ modalId }) => {
       setUserToken(discordUserToken);
     }
   }, [discordUserToken]);
+
+  const handleTokenRedirect = () => {
+    if (!discordUserToken) {
+      closeModal(modalId);
+      navigateToSettingsSection('discord-token-settings');
+    }
+  };
 
   const handleGetInfo = async () => {
     if (!validateToken(userToken)) {
@@ -162,6 +170,8 @@ export const TokenInfoModal: React.FC<TokenInfoModalProps> = ({ modalId }) => {
           error={error}
           warning
           hint={t('discord_token_warning')}
+          onClick={handleTokenRedirect}
+          onFocus={handleTokenRedirect}
         />
 
         <ActionButton

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { UtilityCard } from '../components/Cards/UtilityCard';
 import { Bell, Zap, Download, RotateCw, Globe } from 'lucide-react';
 import { useNotification } from '../contexts/NotificationContext';
@@ -8,6 +8,7 @@ import { enableAutostart, getTokenInfo } from '../utils/tauri';
 import { CustomSelect } from '../components/UI/CustomSelect';
 import { useAuth } from '../contexts/AuthContext';
 import { maskToken } from '../utils/discordToken';
+import { consumeSettingsSection } from '../utils/navigation';
 import './Dashboard.css';
 
 const SETTINGS_KEY = 'confutils_settings';
@@ -29,7 +30,7 @@ const DEFAULT_SETTINGS: AppSettings = {
 const Settings = () => {
   const { showNotification } = useNotification();
   const { language, setLanguage, t } = useLanguage();
-  const { discordUserToken, discordUserTokens, setDiscordUserToken, setActiveDiscordUserToken } = useAuth();
+  const { discordUserToken, discordUserTokens, setDiscordUserToken, setActiveDiscordUserToken, removeDiscordUserToken } = useAuth();
   const [autoStart, setAutoStart] = useState(false);
   const [notifications, setNotifications] = useState(true);
   const [minimizeToTray, setMinimizeToTray] = useState(false);
@@ -38,6 +39,7 @@ const Settings = () => {
   const [tokenStatus, setTokenStatus] = useState<'idle' | 'checking' | 'ok' | 'error'>('idle');
   const [tokenError, setTokenError] = useState('');
   const [tokenProfile, setTokenProfile] = useState<{ username: string; avatarUrl: string } | null>(null);
+  const tokenInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     loadSettings();
@@ -48,6 +50,19 @@ const Settings = () => {
       setTokenInput(discordUserToken);
     }
   }, [discordUserToken]);
+
+  useEffect(() => {
+    const target = consumeSettingsSection();
+    if (target === 'discord-token-settings') {
+      const element = document.getElementById(target);
+      if (element) {
+        setTimeout(() => {
+          element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          tokenInputRef.current?.focus();
+        }, 0);
+      }
+    }
+  }, []);
 
   const loadSettings = () => {
     try {
@@ -154,6 +169,24 @@ const Settings = () => {
     setTokenError('');
     setTokenStatus('idle');
     showNotification('success', t('success'), t('settings_discord_token_saved'));
+  };
+
+  const handleRemoveToken = () => {
+    const candidate = (discordUserToken || tokenInput).trim();
+    if (!candidate) {
+      showNotification('error', t('error'), t('settings_discord_token_required'));
+      return;
+    }
+    if (!discordUserTokens.includes(candidate)) {
+      showNotification('error', t('error'), t('settings_discord_token_not_found'));
+      return;
+    }
+    removeDiscordUserToken(candidate);
+    setTokenInput('');
+    setTokenProfile(null);
+    setTokenStatus('idle');
+    setTokenError('');
+    showNotification('success', t('success'), t('settings_discord_token_removed'));
   };
 
   const handleCheckToken = async () => {
@@ -315,7 +348,7 @@ const Settings = () => {
       <div className="settings-section">
         <h3 className="section-title">{t('settings_section_discord')}</h3>
         <div className="grid-auto">
-          <div className="settings-card">
+          <div className="settings-card" id="discord-token-settings">
             <div className="settings-card-header">
               <div className="settings-card-title">{t('settings_discord_token_title')}</div>
               <div className="settings-card-description">{t('settings_discord_token_description')}</div>
@@ -325,6 +358,7 @@ const Settings = () => {
               <input
                 type="password"
                 className="settings-input"
+                ref={tokenInputRef}
                 value={tokenInput}
                 onChange={(e) => {
                   setTokenInput(e.target.value);
@@ -367,6 +401,13 @@ const Settings = () => {
                   disabled={tokenStatus === 'checking'}
                 >
                   {tokenStatus === 'checking' ? t('settings_discord_token_checking') : t('settings_discord_token_check')}
+                </button>
+                <button
+                  className="settings-btn secondary"
+                  onClick={handleRemoveToken}
+                  disabled={discordUserTokens.length === 0}
+                >
+                  {t('settings_discord_token_remove')}
                 </button>
               </div>
               {tokenProfile && (

@@ -7,6 +7,7 @@ import { useModal } from '../../contexts/ModalContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { cloneMessages, startLiveMessageCloner, stopLiveMessageCloner, MessageCloneOptions } from '../../utils/tauri';
 import { maskToken } from '../../utils/discordToken';
+import { navigateToSettingsSection } from '../../utils/navigation';
 import {
   FormInput,
   FormCheckbox,
@@ -26,7 +27,7 @@ interface MessageClonerModalProps {
 export const MessageClonerModal: React.FC<MessageClonerModalProps> = ({ modalId }) => {
   const { t } = useLanguage();
   const { showNotification } = useNotification();
-  const { updateModalStatus } = useModal();
+  const { updateModalStatus, closeModal } = useModal();
   const { discordUserToken, discordUserTokens, setActiveDiscordUserToken } = useAuth();
 
   const [userToken, setUserToken] = useState('');
@@ -56,6 +57,13 @@ export const MessageClonerModal: React.FC<MessageClonerModalProps> = ({ modalId 
       setUserToken(discordUserToken);
     }
   }, [discordUserToken]);
+
+  const handleTokenRedirect = () => {
+    if (!discordUserToken) {
+      closeModal(modalId);
+      navigateToSettingsSection('discord-token-settings');
+    }
+  };
 
   const scrollToBottom = () => {
     logsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -210,6 +218,8 @@ export const MessageClonerModal: React.FC<MessageClonerModalProps> = ({ modalId 
             required
             warning
             hint={t('discord_token_warning')}
+            onClick={handleTokenRedirect}
+            onFocus={handleTokenRedirect}
           />
 
           <FormInput

@@ -6,6 +6,7 @@ import { useModal } from '../../contexts/ModalContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { spamReactions } from '../../utils/tauri';
 import { maskToken } from '../../utils/discordToken';
+import { navigateToSettingsSection } from '../../utils/navigation';
 import { FormInput, ActionButton } from './common';
 import { validateToken, validateSnowflake } from './utils';
 import './MessageClonerModal.css';
@@ -17,7 +18,7 @@ interface ReactionSpammerModalProps {
 export const ReactionSpammerModal: React.FC<ReactionSpammerModalProps> = ({ modalId }) => {
   const { t } = useLanguage();
   const { showNotification } = useNotification();
-  const { updateModalStatus } = useModal();
+  const { updateModalStatus, closeModal } = useModal();
   const { discordUserToken, discordUserTokens, setActiveDiscordUserToken } = useAuth();
 
   const [userToken, setUserToken] = useState('');
@@ -34,6 +35,13 @@ export const ReactionSpammerModal: React.FC<ReactionSpammerModalProps> = ({ moda
       setUserToken(discordUserToken);
     }
   }, [discordUserToken]);
+
+  const handleTokenRedirect = () => {
+    if (!discordUserToken) {
+      closeModal(modalId);
+      navigateToSettingsSection('discord-token-settings');
+    }
+  };
 
   const validateForm = (): boolean => {
     const newErrors: Record<string, string> = {};
@@ -136,6 +144,8 @@ export const ReactionSpammerModal: React.FC<ReactionSpammerModalProps> = ({ moda
           error={errors.userToken}
           warning={true}
           hint={t('discord_token_warning')}
+          onClick={handleTokenRedirect}
+          onFocus={handleTokenRedirect}
         />
 
         <FormInput

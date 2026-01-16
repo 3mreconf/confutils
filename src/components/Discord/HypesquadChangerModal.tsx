@@ -9,6 +9,7 @@ import { FormInput, ActionButton } from './common';
 import { LogViewer } from './common/LogViewer';
 import { validateToken } from './utils';
 import { maskToken } from '../../utils/discordToken';
+import { navigateToSettingsSection } from '../../utils/navigation';
 import './MessageClonerModal.css';
 
 interface HypesquadChangerModalProps {
@@ -20,7 +21,7 @@ type HypesquadHouse = 'bravery' | 'brilliance' | 'balance' | 'none';
 export const HypesquadChangerModal: React.FC<HypesquadChangerModalProps> = ({ modalId }) => {
   const { t } = useLanguage();
   const { showNotification } = useNotification();
-  const { updateModalStatus } = useModal();
+  const { updateModalStatus, closeModal } = useModal();
   const { discordUserToken, discordUserTokens, setActiveDiscordUserToken } = useAuth();
 
   const [userToken, setUserToken] = useState('');
@@ -34,6 +35,13 @@ export const HypesquadChangerModal: React.FC<HypesquadChangerModalProps> = ({ mo
       setUserToken(discordUserToken);
     }
   }, [discordUserToken]);
+
+  const handleTokenRedirect = () => {
+    if (!discordUserToken) {
+      closeModal(modalId);
+      navigateToSettingsSection('discord-token-settings');
+    }
+  };
 
   const houses = [
     {
@@ -192,6 +200,8 @@ export const HypesquadChangerModal: React.FC<HypesquadChangerModalProps> = ({ mo
             error={error}
             warning
             hint={t('discord_token_warning')}
+            onClick={handleTokenRedirect}
+            onFocus={handleTokenRedirect}
           />
         </div>
 

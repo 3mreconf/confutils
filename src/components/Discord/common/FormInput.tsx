@@ -17,6 +17,8 @@ export interface FormInputProps {
   autoComplete?: string;
   error?: string;
   warning?: boolean;
+  onClick?: () => void;
+  onFocus?: () => void;
 }
 
 export const FormInput: React.FC<FormInputProps> = ({
@@ -35,6 +37,8 @@ export const FormInput: React.FC<FormInputProps> = ({
   autoComplete = 'off',
   error,
   warning = false,
+  onClick,
+  onFocus,
 }) => {
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     let newValue = e.target.value;
@@ -65,6 +69,8 @@ export const FormInput: React.FC<FormInputProps> = ({
           readOnly={readOnly}
           rows={rows}
           required={required}
+          onClick={onClick}
+          onFocus={onFocus}
         />
       ) : (
         <input
@@ -79,6 +85,8 @@ export const FormInput: React.FC<FormInputProps> = ({
           min={min}
           max={max}
           autoComplete={autoComplete}
+          onClick={onClick}
+          onFocus={onFocus}
         />
       )}
 

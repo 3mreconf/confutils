@@ -6,6 +6,7 @@ import { useModal } from '../../contexts/ModalContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { invoke } from '@tauri-apps/api/core';
 import { maskToken } from '../../utils/discordToken';
+import { navigateToSettingsSection } from '../../utils/navigation';
 import './MessageClonerModal.css';
 
 interface NicknameChangerModalProps {
@@ -15,7 +16,7 @@ interface NicknameChangerModalProps {
 export const NicknameChangerModal: React.FC<NicknameChangerModalProps> = ({ modalId }) => {
   const { t } = useLanguage();
   const { showNotification } = useNotification();
-  const { updateModalStatus } = useModal();
+  const { updateModalStatus, closeModal } = useModal();
   const { discordUserToken, discordUserTokens, setActiveDiscordUserToken } = useAuth();
 
   const [userToken, setUserToken] = useState('');
@@ -28,6 +29,13 @@ export const NicknameChangerModal: React.FC<NicknameChangerModalProps> = ({ moda
       setUserToken(discordUserToken);
     }
   }, [discordUserToken]);
+
+  const handleTokenRedirect = () => {
+    if (!discordUserToken) {
+      closeModal(modalId);
+      navigateToSettingsSection('discord-token-settings');
+    }
+  };
 
   const handleChangeNickname = async () => {
     if (!userToken || !guildId || !nickname) {
@@ -95,6 +103,8 @@ export const NicknameChangerModal: React.FC<NicknameChangerModalProps> = ({ moda
             placeholder={discordUserToken ? t('discord_saved_token_placeholder') : t('discord_user_token_placeholder')}
             className="input-field"
             readOnly
+            onClick={handleTokenRedirect}
+            onFocus={handleTokenRedirect}
           />
         </div>
 

@@ -7,6 +7,7 @@ import { useModal } from '../../contexts/ModalContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { scrapeGuildMembers } from '../../utils/tauri';
 import { maskToken } from '../../utils/discordToken';
+import { navigateToSettingsSection } from '../../utils/navigation';
 import {
   FormInput,
   FormCheckbox,
@@ -35,7 +36,7 @@ interface ScraperOptions {
 export const MemberScraperModal: React.FC<MemberScraperModalProps> = ({ modalId }) => {
   const { t } = useLanguage();
   const { showNotification } = useNotification();
-  const { updateModalStatus } = useModal();
+  const { updateModalStatus, closeModal } = useModal();
   const { discordUserToken, discordUserTokens, setActiveDiscordUserToken } = useAuth();
 
   const [userToken, setUserToken] = useState('');
@@ -57,6 +58,13 @@ export const MemberScraperModal: React.FC<MemberScraperModalProps> = ({ modalId 
       setUserToken(discordUserToken);
     }
   }, [discordUserToken]);
+
+  const handleTokenRedirect = () => {
+    if (!discordUserToken) {
+      closeModal(modalId);
+      navigateToSettingsSection('discord-token-settings');
+    }
+  };
 
   useEffect(() => {
     const unlisten = listen<string>('member-scraper-log', (event) => {
@@ -187,6 +195,8 @@ export const MemberScraperModal: React.FC<MemberScraperModalProps> = ({ modalId 
             error={errors.userToken}
             warning
             hint="Bu özellik için bot token'ı kullanmanız önerilir. User token ile çalışmayabilir."
+            onClick={handleTokenRedirect}
+            onFocus={handleTokenRedirect}
           />
 
           <FormInput

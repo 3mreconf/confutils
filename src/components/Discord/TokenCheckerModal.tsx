@@ -6,6 +6,7 @@ import { useModal } from '../../contexts/ModalContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { checkDiscordToken } from '../../utils/tauri';
 import { maskToken } from '../../utils/discordToken';
+import { navigateToSettingsSection } from '../../utils/navigation';
 import './MessageClonerModal.css';
 
 interface TokenCheckerModalProps {
@@ -15,7 +16,7 @@ interface TokenCheckerModalProps {
 export const TokenCheckerModal: React.FC<TokenCheckerModalProps> = ({ modalId }) => {
   const { t } = useLanguage();
   const { showNotification } = useNotification();
-  const { updateModalStatus } = useModal();
+  const { updateModalStatus, closeModal } = useModal();
   const { discordUserToken, discordUserTokens, setActiveDiscordUserToken } = useAuth();
 
   const [userToken, setUserToken] = useState('');
@@ -27,6 +28,13 @@ export const TokenCheckerModal: React.FC<TokenCheckerModalProps> = ({ modalId })
       setUserToken(discordUserToken);
     }
   }, [discordUserToken]);
+
+  const handleTokenRedirect = () => {
+    if (!discordUserToken) {
+      closeModal(modalId);
+      navigateToSettingsSection('discord-token-settings');
+    }
+  };
 
   const handleCheckToken = async () => {
     if (!userToken) {
@@ -101,6 +109,8 @@ export const TokenCheckerModal: React.FC<TokenCheckerModalProps> = ({ modalId })
             placeholder={discordUserToken ? t('discord_saved_token_placeholder') : t('discord_user_token_placeholder')}
             className="input-field"
             readOnly
+            onClick={handleTokenRedirect}
+            onFocus={handleTokenRedirect}
           />
         </div>
 

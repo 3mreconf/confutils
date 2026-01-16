@@ -73,6 +73,20 @@ function App() {
     }
   }, [activePage]);
 
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const customEvent = event as CustomEvent<{ page?: string }>;
+      const nextPage = customEvent.detail?.page;
+      if (nextPage) {
+        setActivePage(nextPage);
+      }
+    };
+    window.addEventListener('confutils:navigate', handler);
+    return () => {
+      window.removeEventListener('confutils:navigate', handler);
+    };
+  }, []);
+
   const renderPage = () => {
     switch (activePage) {
       case 'dashboard': return <Dashboard onPageChange={setActivePage} />;

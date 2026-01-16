@@ -7,6 +7,7 @@ import { useModal } from '../../contexts/ModalContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { cloneDiscordServer, CloneOptions } from '../../utils/tauri';
 import { maskToken } from '../../utils/discordToken';
+import { navigateToSettingsSection } from '../../utils/navigation';
 import { FullScreenModal } from '../UI/FullScreenModal';
 import { LogViewer } from './common';
 import './DiscordClonerModal.css';
@@ -18,7 +19,7 @@ interface DiscordClonerModalProps {
 export const DiscordClonerModal: React.FC<DiscordClonerModalProps> = ({ modalId }) => {
   const { t } = useLanguage();
   const { showNotification } = useNotification();
-  const { updateModalStatus } = useModal();
+  const { updateModalStatus, closeModal } = useModal();
   const { discordUserToken, discordUserTokens, setActiveDiscordUserToken } = useAuth();
 
   const [userToken, setUserToken] = useState('');
@@ -43,6 +44,13 @@ export const DiscordClonerModal: React.FC<DiscordClonerModalProps> = ({ modalId 
       setUserToken(discordUserToken);
     }
   }, [discordUserToken]);
+
+  const handleTokenRedirect = () => {
+    if (!discordUserToken) {
+      closeModal(modalId);
+      navigateToSettingsSection('discord-token-settings');
+    }
+  };
 
   const scrollToBottom = () => {
     logsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -135,6 +143,8 @@ export const DiscordClonerModal: React.FC<DiscordClonerModalProps> = ({ modalId 
             disabled={isCloning}
             autoComplete="off"
             readOnly
+            onClick={handleTokenRedirect}
+            onFocus={handleTokenRedirect}
           />
         </div>
 

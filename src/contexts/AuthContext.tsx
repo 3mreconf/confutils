@@ -6,6 +6,7 @@ interface AuthContextType {
   discordUserTokens: string[];
   setDiscordUserToken: (token: string) => void;
   setActiveDiscordUserToken: (token: string) => void;
+  removeDiscordUserToken: (token: string) => void;
   clearDiscordUserToken: () => void;
 }
 
@@ -145,6 +146,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const removeDiscordUserToken = (token: string) => {
+    const trimmed = token.trim();
+    if (!trimmed) {
+      return;
+    }
+    const updatedList = discordUserTokens.filter(item => item !== trimmed);
+    if (updatedList.length === 0) {
+      localStorage.removeItem(DISCORD_USER_TOKEN_KEY);
+      localStorage.removeItem(DISCORD_USER_TOKENS_KEY);
+      setDiscordUserTokens([]);
+      setDiscordUserTokenState(null);
+      return;
+    }
+    const encryptedList = updatedList.map(item => encryptToken(item));
+    localStorage.setItem(DISCORD_USER_TOKENS_KEY, JSON.stringify(encryptedList));
+    const nextActive = discordUserToken === trimmed ? updatedList[0] : discordUserToken;
+    if (nextActive) {
+      const encryptedActive = encryptToken(nextActive);
+      localStorage.setItem(DISCORD_USER_TOKEN_KEY, encryptedActive);
+      setDiscordUserTokenState(nextActive);
+    }
+    setDiscordUserTokens(updatedList);
+  };
+
   const clearDiscordUserToken = () => {
     localStorage.removeItem(DISCORD_USER_TOKEN_KEY);
     localStorage.removeItem(DISCORD_USER_TOKENS_KEY);
@@ -159,6 +184,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         discordUserTokens,
         setDiscordUserToken,
         setActiveDiscordUserToken,
+        removeDiscordUserToken,
         clearDiscordUserToken,
       }}
     >

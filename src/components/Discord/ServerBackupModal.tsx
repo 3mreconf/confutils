@@ -7,6 +7,7 @@ import { useModal } from '../../contexts/ModalContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { invoke } from '@tauri-apps/api/core';
 import { maskToken } from '../../utils/discordToken';
+import { navigateToSettingsSection } from '../../utils/navigation';
 import {
   FormInput,
   FormCheckbox,
@@ -35,7 +36,7 @@ interface BackupOptions {
 export const ServerBackupModal: React.FC<ServerBackupModalProps> = ({ modalId }) => {
   const { t } = useLanguage();
   const { showNotification } = useNotification();
-  const { updateModalStatus } = useModal();
+  const { updateModalStatus, closeModal } = useModal();
   const { discordUserToken, discordUserTokens, setActiveDiscordUserToken } = useAuth();
 
   const [userToken, setUserToken] = useState('');
@@ -59,6 +60,13 @@ export const ServerBackupModal: React.FC<ServerBackupModalProps> = ({ modalId })
       setUserToken(discordUserToken);
     }
   }, [discordUserToken]);
+
+  const handleTokenRedirect = () => {
+    if (!discordUserToken) {
+      closeModal(modalId);
+      navigateToSettingsSection('discord-token-settings');
+    }
+  };
 
   useEffect(() => {
     const unlisten = listen<string>('server-backup-log', (event) => {
@@ -226,6 +234,8 @@ export const ServerBackupModal: React.FC<ServerBackupModalProps> = ({ modalId })
             error={errors.userToken}
             warning
             hint={t('discord_token_warning')}
+            onClick={handleTokenRedirect}
+            onFocus={handleTokenRedirect}
           />
 
           <FormInput

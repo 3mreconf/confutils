@@ -7,6 +7,7 @@ import { useModal } from '../../contexts/ModalContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { invoke } from '@tauri-apps/api/core';
 import { maskToken } from '../../utils/discordToken';
+import { navigateToSettingsSection } from '../../utils/navigation';
 import './MessageClonerModal.css';
 
 interface BulkDeleteModalProps {
@@ -16,7 +17,7 @@ interface BulkDeleteModalProps {
 export const BulkDeleteModal: React.FC<BulkDeleteModalProps> = ({ modalId }) => {
   const { t } = useLanguage();
   const { showNotification } = useNotification();
-  const { updateModalStatus } = useModal();
+  const { updateModalStatus, closeModal } = useModal();
   const { discordUserToken, discordUserTokens, setActiveDiscordUserToken } = useAuth();
 
   const [userToken, setUserToken] = useState('');
@@ -33,6 +34,13 @@ export const BulkDeleteModal: React.FC<BulkDeleteModalProps> = ({ modalId }) => 
       setUserToken(discordUserToken);
     }
   }, [discordUserToken]);
+
+  const handleTokenRedirect = () => {
+    if (!discordUserToken) {
+      closeModal(modalId);
+      navigateToSettingsSection('discord-token-settings');
+    }
+  };
 
   const scrollToBottom = () => {
     logsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -121,6 +129,8 @@ export const BulkDeleteModal: React.FC<BulkDeleteModalProps> = ({ modalId }) => 
             placeholder={discordUserToken ? t('discord_saved_token_placeholder') : t('discord_user_token_placeholder')}
             className="input-field"
             readOnly
+            onClick={handleTokenRedirect}
+            onFocus={handleTokenRedirect}
           />
         </div>
 
