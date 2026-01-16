@@ -48,6 +48,30 @@ body {
   overflow: hidden;
 }
 
+body[data-font-scale="sm"] {
+  font-size: 13px;
+}
+
+body[data-font-scale="md"] {
+  font-size: 14px;
+}
+
+body[data-font-scale="lg"] {
+  font-size: 15px;
+}
+
+body[data-contrast="soft"] {
+  --text-secondary: #8f959c;
+  --glass-border: #242a31;
+  --accent-cyan-glow: rgba(255, 255, 255, 0.08);
+}
+
+body[data-contrast="high"] {
+  --text-secondary: #d0d5db;
+  --glass-border: #3a4048;
+  --accent-cyan-glow: rgba(255, 255, 255, 0.2);
+}
+
 select {
   background-color: var(--bg-tertiary);
   color: var(--text-primary);

@@ -379,6 +379,14 @@ export const stopLiveMessageCloner = async (): Promise<string> => {
   return await invoke<string>('stop_live_message_cloner');
 };
 
+export const cancelMessageClone = async (): Promise<string> => {
+  return await invoke<string>('cancel_message_clone');
+};
+
+export const cancelDiscordClone = async (): Promise<string> => {
+  return await invoke<string>('cancel_discord_clone');
+};
+
 export const generateSystemReport = async (): Promise<string> => {
   return await invoke<string>('generate_system_report');
 };
@@ -413,6 +421,10 @@ export const scrapeGuildMembers = async (
   options: any
 ): Promise<string> => {
   return await invoke<string>('scrape_guild_members', { userToken, guildId, options });
+};
+
+export const cancelMemberScraper = async (): Promise<string> => {
+  return await invoke<string>('cancel_member_scraper');
 };
 
 export const spamReactions = async (

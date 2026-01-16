@@ -10,6 +10,8 @@ export type { ActionButtonProps } from './ActionButton';
 export { LogViewer } from './LogViewer';
 export type { LogViewerProps } from './LogViewer';
 
+export { TokenNotice } from './TokenNotice';
+
 export {
   ModalHeader,
   SectionCard,

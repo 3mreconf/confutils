@@ -312,6 +312,11 @@ input[type="number"] {
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 
+.logs-actions {
+  display: flex;
+  gap: 8px;
+}
+
 .logs-header h3 {
   margin: 0;
   font-size: 16px;
@@ -409,6 +414,57 @@ input[type="number"] {
 .btn-small {
   font-size: 12px;
   padding: 6px 10px;
+}
+
+.token-alert {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.03);
+  margin-bottom: 16px;
+}
+
+.token-alert-text {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.token-summary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.03);
+  margin-bottom: 16px;
+}
+
+.token-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+}
+
+.token-summary-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.token-summary-title {
+  font-size: 13px;
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.token-summary-subtitle {
+  font-size: 11px;
+  color: var(--text-secondary);
 }
 
 

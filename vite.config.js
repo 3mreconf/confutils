@@ -4,6 +4,10 @@ export default defineConfig({
   plugins: [
     react()
   ],
+  test: {
+    environment: 'node',
+    include: ['tests/**/*.test.ts']
+  },
   build: {
     sourcemap: false,
     cssCodeSplit: true,

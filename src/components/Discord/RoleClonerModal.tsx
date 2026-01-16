@@ -7,6 +7,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { invoke } from '@tauri-apps/api/core';
 import { maskToken } from '../../utils/discordToken';
 import { navigateToSettingsSection } from '../../utils/navigation';
+import { TokenNotice } from './common';
 import './MessageClonerModal.css';
 
 interface RoleClonerModalProps {
@@ -17,7 +18,7 @@ export const RoleClonerModal: React.FC<RoleClonerModalProps> = ({ modalId }) => 
   const { t } = useLanguage();
   const { showNotification } = useNotification();
   const { updateModalStatus, closeModal } = useModal();
-  const { discordUserToken, discordUserTokens, setActiveDiscordUserToken } = useAuth();
+  const { discordUserToken, discordUserTokens, discordTokenLabels, discordTokenProfiles, setActiveDiscordUserToken } = useAuth();
 
   const [userToken, setUserToken] = useState('');
   const [guildId, setGuildId] = useState('');
@@ -68,11 +69,13 @@ export const RoleClonerModal: React.FC<RoleClonerModalProps> = ({ modalId }) => 
   return (
     <div className="discord-modal-container">
       <div className="form-section">
-        {discordUserToken && (
-          <div className="info-message" style={{ marginBottom: '1rem', padding: '0.75rem', background: 'rgba(74, 222, 128, 0.1)', borderRadius: '8px', fontSize: '0.875rem' }}>
-            ✓ {t('discord_saved_token_in_use')}
-          </div>
-        )}
+        <TokenNotice
+          hasToken={Boolean(discordUserToken)}
+          tokenLabel={discordUserToken ? discordTokenLabels[discordUserToken] : undefined}
+          tokenMask={discordUserToken ? maskToken(discordUserToken) : undefined}
+          tokenProfile={discordUserToken ? discordTokenProfiles[discordUserToken] : undefined}
+          onOpenSettings={handleTokenRedirect}
+        />
 
         {discordUserTokens.length > 1 && (
           <div className="form-group">
@@ -89,7 +92,7 @@ export const RoleClonerModal: React.FC<RoleClonerModalProps> = ({ modalId }) => 
             >
               {discordUserTokens.map(token => (
                 <option key={token} value={token}>
-                  {maskToken(token)}
+                  {discordTokenLabels[token] ? `${discordTokenLabels[token]} · ${maskToken(token)}` : maskToken(token)}
                 </option>
               ))}
             </select>

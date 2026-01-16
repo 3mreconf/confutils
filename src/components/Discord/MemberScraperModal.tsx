@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { Users, Database, FileJson, Info, Zap } from 'lucide-react';
+import { Users, Database, FileJson, Info, Zap, StopCircle } from 'lucide-react';
 import { listen } from '@tauri-apps/api/event';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useNotification } from '../../contexts/NotificationContext';
 import { useModal } from '../../contexts/ModalContext';
 import { useAuth } from '../../contexts/AuthContext';
-import { scrapeGuildMembers } from '../../utils/tauri';
+import { scrapeGuildMembers, cancelMemberScraper } from '../../utils/tauri';
 import { maskToken } from '../../utils/discordToken';
+import { TokenNotice } from './common';
 import { navigateToSettingsSection } from '../../utils/navigation';
 import {
   FormInput,
@@ -37,11 +38,12 @@ export const MemberScraperModal: React.FC<MemberScraperModalProps> = ({ modalId 
   const { t } = useLanguage();
   const { showNotification } = useNotification();
   const { updateModalStatus, closeModal } = useModal();
-  const { discordUserToken, discordUserTokens, setActiveDiscordUserToken } = useAuth();
+  const { discordUserToken, discordUserTokens, discordTokenLabels, discordTokenProfiles, setActiveDiscordUserToken } = useAuth();
 
   const [userToken, setUserToken] = useState('');
   const [guildId, setGuildId] = useState('');
   const [isScraping, setIsScraping] = useState(false);
+  const [cancelRequested, setCancelRequested] = useState(false);
   const [logs, setLogs] = useState<string[]>([]);
   const [memberCount, setMemberCount] = useState(0);
   const [options, setOptions] = useState<ScraperOptions>({
@@ -104,6 +106,7 @@ export const MemberScraperModal: React.FC<MemberScraperModalProps> = ({ modalId 
     }
 
     setIsScraping(true);
+    setCancelRequested(false);
     setLogs([]);
     setMemberCount(0);
     updateModalStatus(modalId, 'running');
@@ -118,10 +121,25 @@ export const MemberScraperModal: React.FC<MemberScraperModalProps> = ({ modalId 
       showNotification('success', t('success'), result);
       updateModalStatus(modalId, 'success');
     } catch (error) {
-      showNotification('error', t('error'), `${error}`);
-      updateModalStatus(modalId, 'error');
+      if (cancelRequested) {
+        showNotification('info', t('info'), t('discord_cancelled'));
+        updateModalStatus(modalId, 'idle');
+      } else {
+        showNotification('error', t('error'), `${error}`);
+        updateModalStatus(modalId, 'error');
+      }
     } finally {
       setIsScraping(false);
+    }
+  };
+
+  const handleCancelScraping = async () => {
+    setCancelRequested(true);
+    try {
+      await cancelMemberScraper();
+      showNotification('info', t('info'), t('discord_cancel_requested'));
+    } catch (error) {
+      showNotification('error', t('error'), `${error}`);
     }
   };
 
@@ -133,11 +151,13 @@ export const MemberScraperModal: React.FC<MemberScraperModalProps> = ({ modalId 
         description={t('discord_member_scraper_description')}
       />
 
-      {discordUserToken && (
-        <div className="info-message" style={{ marginBottom: '1rem', padding: '0.75rem', background: 'rgba(74, 222, 128, 0.1)', borderRadius: '8px', fontSize: '0.875rem' }}>
-          ✓ {t('discord_saved_token_in_use')}
-        </div>
-      )}
+      <TokenNotice
+        hasToken={Boolean(discordUserToken)}
+        tokenLabel={discordUserToken ? discordTokenLabels[discordUserToken] : undefined}
+        tokenMask={discordUserToken ? maskToken(discordUserToken) : undefined}
+        tokenProfile={discordUserToken ? discordTokenProfiles[discordUserToken] : undefined}
+        onOpenSettings={handleTokenRedirect}
+      />
 
       <InfoBox type="warning" icon={Info} title={t('discord_member_scraper_info_title')}>
         <ul>
@@ -173,7 +193,7 @@ export const MemberScraperModal: React.FC<MemberScraperModalProps> = ({ modalId 
               >
                 {discordUserTokens.map(token => (
                   <option key={token} value={token}>
-                    {maskToken(token)}
+                  {discordTokenLabels[token] ? `${discordTokenLabels[token]} · ${maskToken(token)}` : maskToken(token)}
                   </option>
                 ))}
               </select>
@@ -257,15 +277,26 @@ export const MemberScraperModal: React.FC<MemberScraperModalProps> = ({ modalId 
         </div>
       </SectionCard>
 
-      <ActionButton
-        label={isScraping ? t('discord_scraping') : t('discord_start_scraping')}
-        onClick={handleStartScraping}
-        icon={Users}
-        disabled={isScraping}
-        loading={isScraping}
-        variant="primary"
-        fullWidth
-      />
+      <div style={{ display: 'flex', gap: '12px' }}>
+        <ActionButton
+          label={isScraping ? t('discord_scraping') : t('discord_start_scraping')}
+          onClick={handleStartScraping}
+          icon={Users}
+          disabled={isScraping}
+          loading={isScraping}
+          variant="primary"
+          fullWidth
+        />
+        {isScraping && (
+          <ActionButton
+            label={t('discord_cancel_scrape')}
+            onClick={handleCancelScraping}
+            icon={StopCircle}
+            variant="danger"
+            fullWidth
+          />
+        )}
+      </div>
 
       {logs.length > 0 && (
         <LogViewer

@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
     "preview": "vite preview",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
@@ -36,6 +38,7 @@
     "@vitejs/plugin-react": "^4.3.4",
     "terser": "^5.44.1",
     "typescript": "^5.7.3",
-    "vite": "^7.2.7"
+    "vite": "^7.2.7",
+    "vitest": "^2.1.8"
   }
 }

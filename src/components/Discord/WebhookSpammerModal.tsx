@@ -1,10 +1,11 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Webhook, StopCircle } from 'lucide-react';
 import { listen } from '@tauri-apps/api/event';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useNotification } from '../../contexts/NotificationContext';
 import { useModal } from '../../contexts/ModalContext';
 import { invoke } from '@tauri-apps/api/core';
+import { LogViewer } from './common';
 import './MessageClonerModal.css';
 
 interface WebhookSpammerModalProps {
@@ -24,16 +25,6 @@ export const WebhookSpammerModal: React.FC<WebhookSpammerModalProps> = ({ modalI
   const [delayMs, setDelayMs] = useState(1000);
   const [isSpamming, setIsSpamming] = useState(false);
   const [logs, setLogs] = useState<string[]>([]);
-
-  const logsEndRef = useRef<HTMLDivElement>(null);
-
-  const scrollToBottom = () => {
-    logsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  };
-
-  useEffect(() => {
-    scrollToBottom();
-  }, [logs]);
 
   useEffect(() => {
     const unlisten = listen<string>('webhook-spam-log', (event) => {
@@ -174,22 +165,18 @@ export const WebhookSpammerModal: React.FC<WebhookSpammerModalProps> = ({ modalI
               style={{ backgroundColor: '#ef4444' }}
             >
               <StopCircle size={16} />
-              Durdur
+              {t('discord_stop')}
             </button>
           )}
         </div>
       </div>
 
       {logs.length > 0 && (
-        <div className="logs-section">
-          <h4>{t('discord_logs')}</h4>
-          <div className="logs-container">
-            {logs.map((log, index) => (
-              <div key={index} className="log-entry">{log}</div>
-            ))}
-            <div ref={logsEndRef} />
-          </div>
-        </div>
+        <LogViewer
+          logs={logs}
+          onClear={() => setLogs([])}
+          title={t('discord_logs_title')}
+        />
       )}
     </div>
   );

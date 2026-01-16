@@ -5,7 +5,7 @@ import { useLanguage } from '../../contexts/LanguageContext';
 import { useNotification } from '../../contexts/NotificationContext';
 import { useModal } from '../../contexts/ModalContext';
 import { useAuth } from '../../contexts/AuthContext';
-import { cloneMessages, startLiveMessageCloner, stopLiveMessageCloner, MessageCloneOptions } from '../../utils/tauri';
+import { cloneMessages, startLiveMessageCloner, stopLiveMessageCloner, cancelMessageClone, MessageCloneOptions } from '../../utils/tauri';
 import { maskToken } from '../../utils/discordToken';
 import { navigateToSettingsSection } from '../../utils/navigation';
 import {
@@ -13,6 +13,7 @@ import {
   FormCheckbox,
   ActionButton,
   LogViewer,
+  TokenNotice,
   ModalHeader,
   SectionCard,
   InfoBox,
@@ -28,7 +29,7 @@ export const MessageClonerModal: React.FC<MessageClonerModalProps> = ({ modalId 
   const { t } = useLanguage();
   const { showNotification } = useNotification();
   const { updateModalStatus, closeModal } = useModal();
-  const { discordUserToken, discordUserTokens, setActiveDiscordUserToken } = useAuth();
+  const { discordUserToken, discordUserTokens, discordTokenLabels, discordTokenProfiles, setActiveDiscordUserToken } = useAuth();
 
   const [userToken, setUserToken] = useState('');
   const [sourceChannelId, setSourceChannelId] = useState('');
@@ -40,6 +41,7 @@ export const MessageClonerModal: React.FC<MessageClonerModalProps> = ({ modalId 
   const [isCloning, setIsCloning] = useState(false);
   const [isLiveMode, setIsLiveMode] = useState(false);
   const [logs, setLogs] = useState<string[]>([]);
+  const [cancelRequested, setCancelRequested] = useState(false);
 
   const [cloneOptions, setCloneOptions] = useState<MessageCloneOptions>({
     messageLimit: 50,
@@ -96,6 +98,7 @@ export const MessageClonerModal: React.FC<MessageClonerModalProps> = ({ modalId 
     }
 
     setIsCloning(true);
+    setCancelRequested(false);
     setLogs([]);
     updateModalStatus(modalId, 'running');
 
@@ -115,11 +118,27 @@ export const MessageClonerModal: React.FC<MessageClonerModalProps> = ({ modalId 
       showNotification('success', t('success'), t('discord_message_clone_success'));
       updateModalStatus(modalId, 'success');
     } catch (error) {
-      addLog(`${t('error')}: ${error}`);
-      showNotification('error', t('error'), `${error}`);
-      updateModalStatus(modalId, 'error');
+      if (cancelRequested) {
+        addLog(t('discord_cancelled'));
+        showNotification('info', t('info'), t('discord_cancelled'));
+        updateModalStatus(modalId, 'idle');
+      } else {
+        addLog(`${t('error')}: ${error}`);
+        showNotification('error', t('error'), `${error}`);
+        updateModalStatus(modalId, 'error');
+      }
     } finally {
       setIsCloning(false);
+    }
+  };
+
+  const handleCancelClone = async () => {
+    setCancelRequested(true);
+    try {
+      await cancelMessageClone();
+      showNotification('info', t('info'), t('discord_cancel_requested'));
+    } catch (error) {
+      showNotification('error', t('error'), `${error}`);
     }
   };
 
@@ -162,11 +181,13 @@ export const MessageClonerModal: React.FC<MessageClonerModalProps> = ({ modalId 
         description={t('discord_message_cloner_description')}
       />
 
-        {discordUserToken && (
-          <div className="info-message" style={{ marginBottom: '1rem', padding: '0.75rem', background: 'rgba(74, 222, 128, 0.1)', borderRadius: '8px', fontSize: '0.875rem' }}>
-            ✓ {t('discord_saved_token_in_use')}
-          </div>
-        )}
+      <TokenNotice
+        hasToken={Boolean(discordUserToken)}
+        tokenLabel={discordUserToken ? discordTokenLabels[discordUserToken] : undefined}
+        tokenMask={discordUserToken ? maskToken(discordUserToken) : undefined}
+        tokenProfile={discordUserToken ? discordTokenProfiles[discordUserToken] : undefined}
+        onOpenSettings={handleTokenRedirect}
+      />
 
       {isLiveMode && (
         <InfoBox type="success">
@@ -200,7 +221,7 @@ export const MessageClonerModal: React.FC<MessageClonerModalProps> = ({ modalId 
               >
                 {discordUserTokens.map(token => (
                   <option key={token} value={token}>
-                    {maskToken(token)}
+                  {discordTokenLabels[token] ? `${discordTokenLabels[token]} · ${maskToken(token)}` : maskToken(token)}
                   </option>
                 ))}
               </select>
@@ -324,7 +345,15 @@ export const MessageClonerModal: React.FC<MessageClonerModalProps> = ({ modalId 
           fullWidth
         />
 
-        {!isLiveMode ? (
+        {isCloning ? (
+          <ActionButton
+            label={t('discord_cancel_clone')}
+            onClick={handleCancelClone}
+            icon={Square}
+            variant="danger"
+            fullWidth
+          />
+        ) : !isLiveMode ? (
           <ActionButton
             label={t('discord_start_live_mode')}
             onClick={handleStartLive}

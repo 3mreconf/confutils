@@ -74,6 +74,21 @@ function App() {
   }, [activePage]);
 
   useEffect(() => {
+    try {
+      const settings = localStorage.getItem('confutils_settings');
+      if (settings) {
+        const parsedSettings = JSON.parse(settings);
+        const fontScale = parsedSettings.fontScale || 'md';
+        const contrast = parsedSettings.contrast || 'default';
+        document.body.dataset.fontScale = fontScale;
+        document.body.dataset.contrast = contrast;
+      }
+    } catch (error) {
+      console.error('Failed to apply UI preferences:', error);
+    }
+  }, []);
+
+  useEffect(() => {
     const handler = (event: Event) => {
       const customEvent = event as CustomEvent<{ page?: string }>;
       const nextPage = customEvent.detail?.page;

@@ -258,6 +258,7 @@ export const UtilityCard = memo(UtilityCardComponent, (prevProps, nextProps) => 
     prevProps.onClick === nextProps.onClick &&
     prevProps.onExecute === nextProps.onExecute &&
     prevProps.onSelectChange === nextProps.onSelectChange &&
+    prevProps.children === nextProps.children &&
     JSON.stringify(prevProps.badge) === JSON.stringify(nextProps.badge) &&
     JSON.stringify(prevProps.selectOptions) === JSON.stringify(nextProps.selectOptions) &&
     JSON.stringify(prevProps.detailedInfo) === JSON.stringify(nextProps.detailedInfo)

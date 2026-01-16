@@ -2,6 +2,7 @@ use std::process::Command;
 use winreg::enums::*;
 use winreg::RegKey;
 use tauri::Emitter;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 #[cfg(windows)]
 use std::os::windows::process::CommandExt;
@@ -11,6 +12,10 @@ use crate::security::*;
 fn check_auth() -> Result<(), String> {
     Ok(())
 }
+
+static CLONE_MESSAGES_CANCELLED: AtomicBool = AtomicBool::new(false);
+static DISCORD_CLONE_CANCELLED: AtomicBool = AtomicBool::new(false);
+static MEMBER_SCRAPER_CANCELLED: AtomicBool = AtomicBool::new(false);
 
 async fn run_powershell_internal(command: String, skip_rate_limit: bool, skip_security_check: bool) -> Result<String, String> {
     let sanitized = if skip_security_check {
@@ -1919,6 +1924,16 @@ pub async fn clone_discord_server(
         let _ = app.emit(obfstr::obfstr!("discord-clone-log"), message);
     };
 
+    DISCORD_CLONE_CANCELLED.store(false, Ordering::SeqCst);
+
+    let check_cancel = || -> Result<(), String> {
+        if DISCORD_CLONE_CANCELLED.load(Ordering::SeqCst) {
+            emit_log("[WARNING] Discord clone cancelled by user".to_string());
+            return Err("Discord clone cancelled".to_string());
+        }
+        Ok(())
+    };
+
     emit_log(obfstr::obfstr!("[+] Cloning process started").to_string());
     emit_log(format!("[INFO] Source Server ID: {}", source_server_id));
     emit_log(format!("[INFO] Target Server ID: {}", target_server_id));
@@ -2025,6 +2040,7 @@ pub async fn clone_discord_server(
                 if let Ok(target_roles) = target_roles_resp.json::<Value>().await {
                     if let Some(roles) = target_roles.as_array() {
                         for role in roles {
+                            check_cancel()?;
                             if let Some(role_name) = role["name"].as_str() {
                                 if role_name != "@everyone" && role["managed"].as_bool() != Some(true) {
                                     if let Some(role_id) = role["id"].as_str() {
@@ -2076,6 +2092,7 @@ pub async fn clone_discord_server(
                 roles_array.retain(|r| r["name"].as_str() != Some("@everyone") && r["managed"].as_bool() != Some(true));
 
                 for role in roles_array {
+                    check_cancel()?;
                     if let Some(role_name) = role["name"].as_str() {
                         let role_data = serde_json::json!({
                             "name": role_name,
@@ -2125,6 +2142,7 @@ pub async fn clone_discord_server(
                 if let Ok(target_channels) = target_channels_resp.json::<Value>().await {
                     if let Some(channels) = target_channels.as_array() {
                         for channel in channels {
+                            check_cancel()?;
                             if let Some(channel_id) = channel["id"].as_str() {
                                 let channel_name = channel["name"].as_str().unwrap_or("Unknown");
                                 let delete_url = format!("{}/channels/{}", base_url, channel_id);
@@ -2172,6 +2190,7 @@ pub async fn clone_discord_server(
                 let mut category_id_map: HashMap<String, String> = HashMap::new();
 
                 for channel in channels_array {
+                    check_cancel()?;
                     if channel["type"].as_u64() == Some(4) {
                         if let Some(channel_name) = channel["name"].as_str() {
                             let channel_data = serde_json::json!({
@@ -2210,6 +2229,7 @@ pub async fn clone_discord_server(
                 }
 
                 for channel in channels_array {
+                    check_cancel()?;
                     let channel_type = channel["type"].as_u64().unwrap_or(0);
                     if channel_type != 4 {
                         if let Some(channel_name) = channel["name"].as_str() {
@@ -2390,6 +2410,8 @@ pub async fn clone_messages(
         let _ = app.emit("message-clone-log", message);
     };
 
+    CLONE_MESSAGES_CANCELLED.store(false, Ordering::SeqCst);
+
     emit_log("[+] Message cloning started".to_string());
     emit_log(format!("[INFO] Source Channel: {}", source_channel_id));
     emit_log(format!("[INFO] Message Limit: {}", options.message_limit));
@@ -2426,6 +2448,10 @@ pub async fn clone_messages(
     let mut skipped_count = 0;
 
     for msg in messages_to_send {
+        if CLONE_MESSAGES_CANCELLED.load(Ordering::SeqCst) {
+            emit_log("[WARNING] Message cloning cancelled by user".to_string());
+            return Err("Message cloning cancelled".to_string());
+        }
         if options.skip_bots {
             if let Some(is_bot) = msg["author"]["bot"].as_bool() {
                 if is_bot {
@@ -2701,6 +2727,18 @@ pub async fn stop_live_message_cloner() -> Result<String, String> {
     let mut is_running = LIVE_CLONER_RUNNING.lock().await;
     *is_running = false;
     Ok("Live cloner stopped".to_string())
+}
+
+#[tauri::command]
+pub async fn cancel_message_clone() -> Result<String, String> {
+    CLONE_MESSAGES_CANCELLED.store(true, Ordering::SeqCst);
+    Ok("Message clone cancellation requested".to_string())
+}
+
+#[tauri::command]
+pub async fn cancel_discord_clone() -> Result<String, String> {
+    DISCORD_CLONE_CANCELLED.store(true, Ordering::SeqCst);
+    Ok("Discord clone cancellation requested".to_string())
 }
 
 #[tauri::command]
@@ -3662,6 +3700,12 @@ pub async fn stop_webhook_spam() -> Result<String, String> {
 }
 
 #[tauri::command]
+pub async fn cancel_member_scraper() -> Result<String, String> {
+    MEMBER_SCRAPER_CANCELLED.store(true, Ordering::SeqCst);
+    Ok("Member scraper cancellation requested".to_string())
+}
+
+#[tauri::command]
 pub async fn delete_webhook(webhook_url: String) -> Result<String, String> {
     let client = reqwest::Client::new();
 
@@ -3704,6 +3748,8 @@ pub async fn scrape_guild_members(
         let _ = app.emit("member-scraper-log", msg);
     };
 
+    MEMBER_SCRAPER_CANCELLED.store(false, Ordering::SeqCst);
+
     emit_log("[INFO] Starting member scraping...".to_string());
     emit_log("[WARNING] This may violate Discord Terms of Service!".to_string());
 
@@ -3726,6 +3772,10 @@ pub async fn scrape_guild_members(
     let limit = 1000;
 
     loop {
+        if MEMBER_SCRAPER_CANCELLED.load(Ordering::SeqCst) {
+            emit_log("[WARNING] Member scraping cancelled by user".to_string());
+            return Err("Member scraping cancelled".to_string());
+        }
         let url = format!(
             "{}/guilds/{}/members?limit={}&after={}",
             base_url, guild_id, limit, after

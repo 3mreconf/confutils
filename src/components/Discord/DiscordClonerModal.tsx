@@ -5,11 +5,11 @@ import { useLanguage } from '../../contexts/LanguageContext';
 import { useNotification } from '../../contexts/NotificationContext';
 import { useModal } from '../../contexts/ModalContext';
 import { useAuth } from '../../contexts/AuthContext';
-import { cloneDiscordServer, CloneOptions } from '../../utils/tauri';
+import { cloneDiscordServer, cancelDiscordClone, CloneOptions } from '../../utils/tauri';
 import { maskToken } from '../../utils/discordToken';
 import { navigateToSettingsSection } from '../../utils/navigation';
 import { FullScreenModal } from '../UI/FullScreenModal';
-import { LogViewer } from './common';
+import { LogViewer, TokenNotice } from './common';
 import './DiscordClonerModal.css';
 
 interface DiscordClonerModalProps {
@@ -20,7 +20,7 @@ export const DiscordClonerModal: React.FC<DiscordClonerModalProps> = ({ modalId 
   const { t } = useLanguage();
   const { showNotification } = useNotification();
   const { updateModalStatus, closeModal } = useModal();
-  const { discordUserToken, discordUserTokens, setActiveDiscordUserToken } = useAuth();
+  const { discordUserToken, discordUserTokens, discordTokenLabels, discordTokenProfiles, setActiveDiscordUserToken } = useAuth();
 
   const [userToken, setUserToken] = useState('');
   const [sourceServerId, setSourceServerId] = useState('');
@@ -29,6 +29,7 @@ export const DiscordClonerModal: React.FC<DiscordClonerModalProps> = ({ modalId 
   const [logs, setLogs] = useState<string[]>([]);
   const [showLogModal, setShowLogModal] = useState(false);
   const [showOptions, setShowOptions] = useState(true);
+  const [cancelRequested, setCancelRequested] = useState(false);
   const [cloneOptions, setCloneOptions] = useState<CloneOptions>({
     serverName: true,
     serverIcon: true,
@@ -83,6 +84,7 @@ export const DiscordClonerModal: React.FC<DiscordClonerModalProps> = ({ modalId 
     }
 
     setIsCloning(true);
+    setCancelRequested(false);
     setLogs([]);
     setShowLogModal(true);
     updateModalStatus(modalId, 'running');
@@ -92,22 +94,40 @@ export const DiscordClonerModal: React.FC<DiscordClonerModalProps> = ({ modalId 
       showNotification('success', t('success'), t('discord_clone_success'));
       updateModalStatus(modalId, 'success');
     } catch (error) {
-      addLog(`${t('error')}: ${error}`);
-      showNotification('error', t('error'), `${error}`);
-      updateModalStatus(modalId, 'error');
+      if (cancelRequested) {
+        addLog(t('discord_cancelled'));
+        showNotification('info', t('info'), t('discord_cancelled'));
+        updateModalStatus(modalId, 'idle');
+      } else {
+        addLog(`${t('error')}: ${error}`);
+        showNotification('error', t('error'), `${error}`);
+        updateModalStatus(modalId, 'error');
+      }
     } finally {
       setIsCloning(false);
+    }
+  };
+
+  const handleCancelClone = async () => {
+    setCancelRequested(true);
+    try {
+      await cancelDiscordClone();
+      showNotification('info', t('info'), t('discord_cancel_requested'));
+    } catch (error) {
+      showNotification('error', t('error'), `${error}`);
     }
   };
 
   return (
     <div className="discord-cloner-modal">
       <div className="discord-cloner-form">
-        {discordUserToken && (
-          <div className="info-message" style={{ marginBottom: '1rem', padding: '0.75rem', background: 'rgba(74, 222, 128, 0.1)', borderRadius: '8px', fontSize: '0.875rem' }}>
-            {t('discord_saved_token_in_use')}
-          </div>
-        )}
+        <TokenNotice
+          hasToken={Boolean(discordUserToken)}
+          tokenLabel={discordUserToken ? discordTokenLabels[discordUserToken] : undefined}
+          tokenMask={discordUserToken ? maskToken(discordUserToken) : undefined}
+          tokenProfile={discordUserToken ? discordTokenProfiles[discordUserToken] : undefined}
+          onOpenSettings={handleTokenRedirect}
+        />
 
         {discordUserTokens.length > 1 && (
           <div className="input-group">
@@ -124,7 +144,7 @@ export const DiscordClonerModal: React.FC<DiscordClonerModalProps> = ({ modalId 
             >
               {discordUserTokens.map(token => (
                 <option key={token} value={token}>
-                  {maskToken(token)}
+                  {discordTokenLabels[token] ? `${discordTokenLabels[token]} · ${maskToken(token)}` : maskToken(token)}
                 </option>
               ))}
             </select>
@@ -276,14 +296,24 @@ export const DiscordClonerModal: React.FC<DiscordClonerModalProps> = ({ modalId 
           )}
         </div>
 
-        <button
-          className={`btn btn-primary ${isCloning ? 'btn-loading' : ''}`}
-          onClick={handleClone}
-          disabled={isCloning}
-        >
-          <Copy size={16} />
-          {isCloning ? t('discord_cloning_in_progress') : t('discord_start_cloning')}
-        </button>
+        <div className="clone-action-row">
+          <button
+            className={`btn btn-primary ${isCloning ? 'btn-loading' : ''}`}
+            onClick={handleClone}
+            disabled={isCloning}
+          >
+            <Copy size={16} />
+            {isCloning ? t('discord_cloning_in_progress') : t('discord_start_cloning')}
+          </button>
+          {isCloning && (
+            <button
+              className="btn btn-danger"
+              onClick={handleCancelClone}
+            >
+              {t('discord_cancel_clone')}
+            </button>
+          )}
+        </div>
       </div>
 
       {showLogModal && (
