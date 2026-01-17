@@ -165,6 +165,101 @@
   cursor: not-allowed;
 }
 
+.settings-update-panel {
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  padding: 16px;
+  background: var(--glass-bg);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.settings-update-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.settings-update-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.settings-update-badge {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  border: 1px solid var(--glass-border);
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+}
+
+.settings-update-badge.available {
+  color: var(--status-success);
+  border-color: rgba(30, 215, 96, 0.4);
+  background: rgba(30, 215, 96, 0.08);
+}
+
+.settings-update-badge.error {
+  color: var(--status-error);
+  border-color: rgba(255, 78, 106, 0.4);
+  background: rgba(255, 78, 106, 0.08);
+}
+
+.settings-update-badge.checking {
+  color: var(--accent-cyan);
+  border-color: rgba(46, 213, 255, 0.4);
+  background: rgba(46, 213, 255, 0.08);
+}
+
+.settings-update-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.settings-update-error {
+  font-size: 12px;
+  color: var(--status-error);
+}
+
+.settings-changelog {
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-md);
+  background: var(--bg-tertiary);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.settings-changelog-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.settings-changelog-body {
+  font-size: 12px;
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+  line-height: 1.6;
+}
+
+.settings-update-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
 .settings-token-error {
   color: var(--status-error);
   font-size: 12px;

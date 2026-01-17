@@ -718,3 +718,219 @@
   color: var(--text-muted);
   margin: 4px 0 0 0;
 }
+
+.utilities-tab {
+  padding: 4px 20px 20px 20px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.utilities-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  align-items: stretch;
+}
+
+.utility-card {
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  background: var(--glass-bg);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  height: 100%;
+}
+
+.utility-card-compact {
+  align-self: start;
+  height: auto;
+  grid-column: 1 / -1;
+}
+
+.utility-card-header {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.utility-card-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.utility-card-description {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.utility-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.utility-select {
+  padding: 8px 10px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--glass-border);
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  font-size: 0.85rem;
+}
+
+.utility-btn {
+  background: var(--text-primary);
+  color: #0b0d0f;
+  border: 1px solid var(--text-primary);
+  border-radius: var(--radius-md);
+  padding: 8px 12px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.utility-btn.secondary {
+  background: #14181d;
+  color: var(--text-primary);
+  border: 1px solid var(--glass-border);
+}
+
+.utility-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.utility-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.utility-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.utility-toggle input {
+  accent-color: var(--text-primary);
+}
+
+.utility-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.utility-list-item {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: var(--radius-md);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--glass-border);
+  min-width: 0;
+}
+
+.utility-list-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.utility-list-name {
+  font-size: 0.85rem;
+  color: var(--text-primary);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.utility-list-sub {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  word-break: break-all;
+  overflow-wrap: anywhere;
+}
+
+.impact-badge {
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 4px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--glass-border);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+}
+
+.impact-badge.high {
+  color: var(--status-error);
+  border-color: rgba(255, 78, 106, 0.4);
+  background: rgba(255, 78, 106, 0.12);
+}
+
+.impact-badge.medium {
+  color: #f0c75e;
+  border-color: rgba(240, 199, 94, 0.35);
+  background: rgba(240, 199, 94, 0.12);
+}
+
+.impact-badge.low {
+  color: var(--status-success);
+  border-color: rgba(30, 215, 96, 0.35);
+  background: rgba(30, 215, 96, 0.12);
+}
+
+.utility-result {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--glass-border);
+  background: var(--bg-tertiary);
+}
+
+.utility-result-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.utility-result-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 140px;
+  overflow: auto;
+}
+
+.utility-result-item {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  word-break: break-all;
+}
+
+.utility-empty {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.utility-error {
+  font-size: 0.8rem;
+  color: var(--status-error);
+}

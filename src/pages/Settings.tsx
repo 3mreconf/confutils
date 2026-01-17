@@ -4,6 +4,7 @@ import { Bell, Zap, Download, RotateCw, Globe, Type, SlidersHorizontal, Upload, 
 import { useNotification } from '../contexts/NotificationContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { open } from '@tauri-apps/plugin-shell';
+import { getVersion } from '@tauri-apps/api/app';
 import { enableAutostart, getTokenInfo } from '../utils/tauri';
 import { CustomSelect } from '../components/UI/CustomSelect';
 import { useAuth } from '../contexts/AuthContext';
@@ -62,9 +63,36 @@ const Settings = () => {
   const importInputRef = useRef<HTMLInputElement | null>(null);
   const [confirmRemove, setConfirmRemove] = useState(false);
   const [confirmClearAll, setConfirmClearAll] = useState(false);
+  const [currentVersion, setCurrentVersion] = useState<string | null>(null);
+  const [latestRelease, setLatestRelease] = useState<{
+    version: string;
+    name: string;
+    body: string;
+    htmlUrl: string;
+    downloadUrl: string | null;
+    publishedAt: string;
+  } | null>(null);
+  const [updateStatus, setUpdateStatus] = useState<'idle' | 'checking' | 'available' | 'upToDate' | 'error'>('idle');
+  const [updateError, setUpdateError] = useState<string | null>(null);
 
   useEffect(() => {
     loadSettings();
+  }, []);
+
+  useEffect(() => {
+    const loadVersion = async () => {
+      try {
+        const version = await getVersion();
+        setCurrentVersion(version);
+      } catch {
+        setCurrentVersion(null);
+      }
+    };
+    loadVersion();
+  }, []);
+
+  useEffect(() => {
+    fetchLatestRelease(false);
   }, []);
 
   useEffect(() => {
@@ -189,14 +217,96 @@ const Settings = () => {
     showNotification('success', t('notification_language_updated_title'), t('notification_language_updated_message', { language: selectedLanguage }));
   };
 
-  const handleCheckUpdates = async () => {
+  const normalizeVersion = (value: string) => value.replace(/^v/i, '');
+
+  const compareVersions = (a: string, b: string) => {
+    const partsA = normalizeVersion(a).split('.').map(Number);
+    const partsB = normalizeVersion(b).split('.').map(Number);
+    const length = Math.max(partsA.length, partsB.length);
+    for (let i = 0; i < length; i += 1) {
+      const partA = partsA[i] || 0;
+      const partB = partsB[i] || 0;
+      if (partA > partB) return 1;
+      if (partA < partB) return -1;
+    }
+    return 0;
+  };
+
+  const pickDownloadUrl = (assets: Array<{ name: string; browser_download_url: string }>) => {
+    const windowsAsset = assets.find((asset) => asset.name.toLowerCase().endsWith('.msi'))
+      || assets.find((asset) => asset.name.toLowerCase().endsWith('.exe'));
+    return windowsAsset ? windowsAsset.browser_download_url : null;
+  };
+
+  const fetchLatestRelease = async (notify: boolean) => {
+    setUpdateStatus('checking');
+    setUpdateError(null);
+    if (notify) {
+      showNotification('info', t('notification_checking_for_updates_title'), t('notification_checking_for_updates_message'));
+    }
     try {
-      await open('https://github.com/3mreconf/confutils-releases/releases');
-      showNotification('success', t('success'), t('notification_opening_browser'));
+      const response = await fetch('https://api.github.com/repos/3mreconf/confutils/releases/latest', {
+        headers: {
+          Accept: 'application/vnd.github+json'
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      const data = await response.json();
+      const version = normalizeVersion(data.tag_name || data.name || '');
+      const downloadUrl = pickDownloadUrl(data.assets || []);
+      const nextRelease = {
+        version,
+        name: data.name || data.tag_name || `v${version}`,
+        body: data.body || '',
+        htmlUrl: data.html_url || 'https://github.com/3mreconf/confutils-releases/releases',
+        downloadUrl,
+        publishedAt: data.published_at || ''
+      };
+      setLatestRelease(nextRelease);
+
+      if (currentVersion) {
+        if (compareVersions(version, currentVersion) > 0) {
+          setUpdateStatus('available');
+          if (notify) {
+            showNotification('success', t('notification_update_found_title'), t('notification_update_found_message', { version }));
+          }
+        } else {
+          setUpdateStatus('upToDate');
+          if (notify) {
+            showNotification('success', t('notification_update_up_to_date_title'), t('notification_update_up_to_date_message'));
+          }
+        }
+      } else {
+        setUpdateStatus('idle');
+      }
     } catch (error) {
-      showNotification('error', t('error'), `${error}`);
+      const message = error instanceof Error ? error.message : String(error);
+      setUpdateStatus('error');
+      setUpdateError(message);
+      if (notify) {
+        showNotification('error', t('notification_update_check_failed_title'), t('notification_update_check_failed_message', { error: message }));
+      }
     }
   };
+
+  const handleCheckUpdates = async () => {
+    await fetchLatestRelease(true);
+  };
+
+  useEffect(() => {
+    if (!latestRelease || !currentVersion) {
+      return;
+    }
+    if (compareVersions(latestRelease.version, currentVersion) > 0) {
+      setUpdateStatus('available');
+    } else {
+      setUpdateStatus('upToDate');
+    }
+  }, [latestRelease, currentVersion]);
 
   const handleSaveToken = () => {
     const trimmed = tokenInput.trim();
@@ -549,6 +659,54 @@ const Settings = () => {
             actionLabel={t('settings_check_for_updates_button')}
             onAction={handleCheckUpdates}
           />
+          {latestRelease && (
+            <div className="settings-update-panel">
+              <div className="settings-update-header">
+                <div className="settings-update-title">{t('settings_update_status_title')}</div>
+                <div className={`settings-update-badge ${updateStatus}`}>
+                  {updateStatus === 'available' && t('settings_update_available')}
+                  {updateStatus === 'upToDate' && t('settings_update_up_to_date')}
+                  {updateStatus === 'checking' && t('settings_update_checking')}
+                  {updateStatus === 'error' && t('settings_update_failed')}
+                </div>
+              </div>
+              <div className="settings-update-meta">
+                <span>{t('settings_update_current_version')}: {currentVersion || '2.0.0'}</span>
+                <span>{t('settings_update_latest_version')}: {latestRelease.version}</span>
+              </div>
+              {updateError && (
+                <div className="settings-update-error">{updateError}</div>
+              )}
+              {latestRelease.body && (
+                <div className="settings-changelog">
+                  <div className="settings-changelog-title">{t('settings_update_changelog')}</div>
+                  <div className="settings-changelog-body">{latestRelease.body}</div>
+                </div>
+              )}
+              <div className="settings-update-actions">
+                <button
+                  className="settings-btn secondary"
+                  onClick={() => open(latestRelease.htmlUrl)}
+                  type="button"
+                >
+                  {t('settings_update_open_release')}
+                </button>
+                {latestRelease.downloadUrl && (
+                  <button
+                    className="settings-btn"
+                    onClick={() => {
+                      if (latestRelease.downloadUrl) {
+                        open(latestRelease.downloadUrl);
+                      }
+                    }}
+                    type="button"
+                  >
+                    {t('settings_update_download')}
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
 
           <UtilityCard
             icon={RotateCw}

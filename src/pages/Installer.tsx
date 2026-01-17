@@ -18,11 +18,40 @@ import {
   RefreshCw,
   Trash2,
   History,
-  Search
+  Search,
+  ShieldAlert,
+  ShieldCheck,
+  FolderSearch,
+  HardDrive,
+  Monitor,
+  AlertTriangle
 } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useNotification } from '../contexts/NotificationContext';
-import { installWingetPackage, getInstalledApps, updateWingetPackage, uninstallWingetPackage } from '../utils/tauri';
+import {
+  installWingetPackage,
+  getInstalledApps,
+  updateWingetPackage,
+  uninstallWingetPackage,
+  listStartupPrograms,
+  applyHostsBlocklist,
+  removeHostsBlocklist,
+  getHostsBlocklistStatus,
+  applyPrivacyFirewallRules,
+  removePrivacyFirewallRules,
+  getPrivacyFirewallStatus,
+  openDeviceManager,
+  scanDeviceIssues,
+  scanAppLeftovers,
+  applyStorageSenseProfile,
+  runPrivacyAudit,
+  disableStorageSense,
+  scanHiddenServices,
+  analyzeJunkOrigins,
+  applyPowerAudioOptimizations,
+  revertPowerAudioOptimizations,
+  monitorAppUsage
+} from '../utils/tauri';
 import { UpdateModal } from '../components/Installer/UpdateModal';
 import './Installer.css';
 
@@ -223,10 +252,61 @@ interface InstallationHistory {
   success: boolean;
 }
 
+interface StartupProgram {
+  Name: string;
+  Command: string;
+  Location: string;
+  Enabled: boolean;
+}
+
+interface DeviceIssue {
+  FriendlyName?: string;
+  InstanceId?: string;
+  Class?: string;
+  Status?: string;
+}
+
+interface AppLeftoverResult {
+  files: string[];
+  registry: string[];
+}
+
+interface PrivacyAuditFinding {
+  id: string;
+  title: string;
+  enabled: boolean;
+  detail: string;
+}
+
+interface PrivacyAuditResult {
+  score: number;
+  findings: PrivacyAuditFinding[];
+}
+
+interface HiddenService {
+  Name?: string;
+  DisplayName?: string;
+  PathName?: string;
+  StartMode?: string;
+  State?: string;
+}
+
+interface JunkOrigin {
+  Name?: string;
+  Path?: string;
+  SizeMB?: number;
+}
+
+interface AppUsage {
+  Name?: string;
+  Cpu?: number;
+  MemoryMB?: number;
+}
+
 const Installer: React.FC = () => {
   const { t } = useLanguage();
   const { showNotification } = useNotification();
-  const [activeTab, setActiveTab] = useState<'install' | 'installed' | 'updates' | 'history'>('install');
+  const [activeTab, setActiveTab] = useState<'install' | 'installed' | 'updates' | 'history' | 'utilities'>('install');
   const [selectedApps, setSelectedApps] = useState<string[]>([]);
   const [installing, setInstalling] = useState(false);
   const [logs, setLogs] = useState<string[]>([]);
@@ -238,6 +318,30 @@ const Installer: React.FC = () => {
   const [updateModalOpen, setUpdateModalOpen] = useState(false);
   const [updatingApp, setUpdatingApp] = useState<{ id: string; name?: string } | null>(null);
   const [updatingAll, setUpdatingAll] = useState(false);
+  const [startupPrograms, setStartupPrograms] = useState<StartupProgram[]>([]);
+  const [startupLoading, setStartupLoading] = useState(false);
+  const [startupError, setStartupError] = useState<string | null>(null);
+  const [leftoverAppId, setLeftoverAppId] = useState<string>('');
+  const [leftoverResult, setLeftoverResult] = useState<AppLeftoverResult | null>(null);
+  const [leftoverLoading, setLeftoverLoading] = useState(false);
+  const [deviceIssues, setDeviceIssues] = useState<DeviceIssue[]>([]);
+  const [deviceScanLoading, setDeviceScanLoading] = useState(false);
+  const [hostsAdsEnabled, setHostsAdsEnabled] = useState(false);
+  const [hostsTelemetryEnabled, setHostsTelemetryEnabled] = useState(false);
+  const [hostsLoading, setHostsLoading] = useState(false);
+  const [firewallEnabled, setFirewallEnabled] = useState(false);
+  const [firewallLoading, setFirewallLoading] = useState(false);
+  const [storageProfile, setStorageProfile] = useState<'light' | 'balanced' | 'aggressive'>('balanced');
+  const [storageLoading, setStorageLoading] = useState(false);
+  const [privacyAudit, setPrivacyAudit] = useState<PrivacyAuditResult | null>(null);
+  const [privacyAuditLoading, setPrivacyAuditLoading] = useState(false);
+  const [hiddenServices, setHiddenServices] = useState<HiddenService[]>([]);
+  const [hiddenServicesLoading, setHiddenServicesLoading] = useState(false);
+  const [junkOrigins, setJunkOrigins] = useState<JunkOrigin[]>([]);
+  const [junkOriginsLoading, setJunkOriginsLoading] = useState(false);
+  const [powerAudioLoading, setPowerAudioLoading] = useState(false);
+  const [appUsage, setAppUsage] = useState<AppUsage[]>([]);
+  const [appUsageLoading, setAppUsageLoading] = useState(false);
   const fetchingRef = useRef(false);
 
   const toggleApp = (id: string) => {
@@ -325,6 +429,272 @@ const Installer: React.FC = () => {
     const updatedHistory = [newHistory, ...history].slice(0, 100);
     setHistory(updatedHistory);
     localStorage.setItem('confutils_install_history', JSON.stringify(updatedHistory));
+  };
+
+  const getStartupImpact = (program: StartupProgram) => {
+    let score = 0;
+    const name = program.Name.toLowerCase();
+    const command = program.Command.toLowerCase();
+    const location = program.Location.toLowerCase();
+
+    if (program.Enabled) score += 2;
+    if (name.includes('update') || name.includes('helper') || name.includes('agent')) score += 1;
+    if (command.includes('update') || command.includes('updater')) score += 1;
+    if (location.includes('run')) score += 1;
+    if (command.length > 80) score += 1;
+
+    if (score >= 4) return { level: 'high', score };
+    if (score >= 2) return { level: 'medium', score };
+    return { level: 'low', score };
+  };
+
+  const fetchStartupPrograms = useCallback(async () => {
+    setStartupLoading(true);
+    setStartupError(null);
+    try {
+      const result = await listStartupPrograms();
+      const parsed = JSON.parse(result || '[]');
+      if (Array.isArray(parsed)) {
+        setStartupPrograms(parsed as StartupProgram[]);
+      } else {
+        setStartupPrograms([]);
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setStartupPrograms([]);
+      setStartupError(message);
+    } finally {
+      setStartupLoading(false);
+    }
+  }, []);
+
+  const loadHostsStatus = useCallback(async () => {
+    setHostsLoading(true);
+    try {
+      const [adsStatus, telemetryStatus] = await Promise.all([
+        getHostsBlocklistStatus('ads'),
+        getHostsBlocklistStatus('telemetry')
+      ]);
+      setHostsAdsEnabled(adsStatus.trim().toLowerCase() === 'true');
+      setHostsTelemetryEnabled(telemetryStatus.trim().toLowerCase() === 'true');
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setHostsLoading(false);
+    }
+  }, []);
+
+  const loadFirewallStatus = useCallback(async () => {
+    setFirewallLoading(true);
+    try {
+      const status = await getPrivacyFirewallStatus();
+      setFirewallEnabled(status.trim().toLowerCase() === 'true');
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setFirewallLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (activeTab === 'utilities') {
+      fetchInstalledApps();
+      fetchStartupPrograms();
+      loadHostsStatus();
+      loadFirewallStatus();
+    }
+  }, [activeTab, fetchInstalledApps, fetchStartupPrograms, loadHostsStatus, loadFirewallStatus]);
+
+  const handleToggleHostsBlocklist = async (listType: 'ads' | 'telemetry', enabled: boolean) => {
+    try {
+      if (enabled) {
+        await applyHostsBlocklist(listType);
+      } else {
+        await removeHostsBlocklist(listType);
+      }
+      await loadHostsStatus();
+      showNotification('success', t('success'), enabled ? t('hosts_blocklist_enabled') : t('hosts_blocklist_disabled'));
+    } catch (error) {
+      showNotification('error', t('error'), `${error}`);
+    }
+  };
+
+  const handleTogglePrivacyFirewall = async (enabled: boolean) => {
+    try {
+      if (enabled) {
+        await applyPrivacyFirewallRules();
+      } else {
+        await removePrivacyFirewallRules();
+      }
+      await loadFirewallStatus();
+      showNotification('success', t('success'), enabled ? t('privacy_firewall_enabled') : t('privacy_firewall_disabled'));
+    } catch (error) {
+      showNotification('error', t('error'), `${error}`);
+    }
+  };
+
+  const handleScanDeviceIssues = async () => {
+    setDeviceScanLoading(true);
+    setDeviceIssues([]);
+    try {
+      const result = await scanDeviceIssues();
+      const parsed = JSON.parse(result || '[]');
+      if (Array.isArray(parsed)) {
+        setDeviceIssues(parsed as DeviceIssue[]);
+      } else {
+        setDeviceIssues([]);
+      }
+      showNotification('success', t('success'), t('device_scan_completed'));
+    } catch (error) {
+      showNotification('error', t('error'), `${error}`);
+    } finally {
+      setDeviceScanLoading(false);
+    }
+  };
+
+  const handleOpenDeviceManager = async () => {
+    try {
+      const result = await openDeviceManager();
+      showNotification('success', t('success'), result);
+    } catch (error) {
+      showNotification('error', t('error'), `${error}`);
+    }
+  };
+
+  const handleScanLeftovers = async () => {
+    if (!leftoverAppId) {
+      showNotification('warning', t('warning') || 'Warning', t('leftover_select_app'));
+      return;
+    }
+    setLeftoverLoading(true);
+    setLeftoverResult(null);
+    try {
+      const result = await scanAppLeftovers(leftoverAppId);
+      const parsed = JSON.parse(result || '{}');
+      setLeftoverResult({
+        files: Array.isArray(parsed.files) ? parsed.files : [],
+        registry: Array.isArray(parsed.registry) ? parsed.registry : []
+      });
+    } catch (error) {
+      showNotification('error', t('error'), `${error}`);
+    } finally {
+      setLeftoverLoading(false);
+    }
+  };
+
+  const handleApplyStorageProfile = async () => {
+    setStorageLoading(true);
+    try {
+      const result = await applyStorageSenseProfile(storageProfile);
+      showNotification('success', t('success'), result);
+    } catch (error) {
+      showNotification('error', t('error'), `${error}`);
+    } finally {
+      setStorageLoading(false);
+    }
+  };
+
+  const handleDisableStorageSense = async () => {
+    setStorageLoading(true);
+    try {
+      const result = await disableStorageSense();
+      showNotification('success', t('success'), result);
+    } catch (error) {
+      showNotification('error', t('error'), `${error}`);
+    } finally {
+      setStorageLoading(false);
+    }
+  };
+
+  const handlePrivacyAudit = async () => {
+    setPrivacyAuditLoading(true);
+    setPrivacyAudit(null);
+    try {
+      const result = await runPrivacyAudit();
+      const parsed = JSON.parse(result || '{}');
+      if (parsed && typeof parsed === 'object') {
+        setPrivacyAudit({
+          score: parsed.score || 0,
+          findings: Array.isArray(parsed.findings) ? parsed.findings : []
+        });
+      }
+    } catch (error) {
+      showNotification('error', t('error'), `${error}`);
+    } finally {
+      setPrivacyAuditLoading(false);
+    }
+  };
+
+  const handleScanHiddenServices = async () => {
+    setHiddenServicesLoading(true);
+    setHiddenServices([]);
+    try {
+      const result = await scanHiddenServices();
+      const parsed = JSON.parse(result || '[]');
+      if (Array.isArray(parsed)) {
+        setHiddenServices(parsed as HiddenService[]);
+      }
+    } catch (error) {
+      showNotification('error', t('error'), `${error}`);
+    } finally {
+      setHiddenServicesLoading(false);
+    }
+  };
+
+  const handleAnalyzeJunkOrigins = async () => {
+    setJunkOriginsLoading(true);
+    setJunkOrigins([]);
+    try {
+      const result = await analyzeJunkOrigins();
+      const parsed = JSON.parse(result || '[]');
+      if (Array.isArray(parsed)) {
+        setJunkOrigins(parsed as JunkOrigin[]);
+      }
+    } catch (error) {
+      showNotification('error', t('error'), `${error}`);
+    } finally {
+      setJunkOriginsLoading(false);
+    }
+  };
+
+  const handleApplyPowerAudio = async () => {
+    setPowerAudioLoading(true);
+    try {
+      const result = await applyPowerAudioOptimizations();
+      showNotification('success', t('success'), result);
+    } catch (error) {
+      showNotification('error', t('error'), `${error}`);
+    } finally {
+      setPowerAudioLoading(false);
+    }
+  };
+
+  const handleRevertPowerAudio = async () => {
+    setPowerAudioLoading(true);
+    try {
+      const result = await revertPowerAudioOptimizations();
+      showNotification('success', t('success'), result);
+    } catch (error) {
+      showNotification('error', t('error'), `${error}`);
+    } finally {
+      setPowerAudioLoading(false);
+    }
+  };
+
+  const handleMonitorAppUsage = async () => {
+    setAppUsageLoading(true);
+    setAppUsage([]);
+    try {
+      const result = await monitorAppUsage();
+      const parsed = JSON.parse(result || '[]');
+      if (Array.isArray(parsed)) {
+        setAppUsage(parsed as AppUsage[]);
+      }
+    } catch (error) {
+      showNotification('error', t('error'), `${error}`);
+    } finally {
+      setAppUsageLoading(false);
+    }
   };
 
   const handleInstall = async () => {
@@ -488,6 +858,13 @@ const Installer: React.FC = () => {
         >
           <History size={18} />
           {t('history') || 'History'}
+        </button>
+        <button
+          className={`tab-btn ${activeTab === 'utilities' ? 'active' : ''}`}
+          onClick={() => setActiveTab('utilities')}
+        >
+          <Wrench size={18} />
+          {t('installer_utilities') || 'Utilities'}
         </button>
       </div>
 
@@ -717,6 +1094,397 @@ const Installer: React.FC = () => {
                 ))}
               </div>
             )}
+          </div>
+        )}
+        {activeTab === 'utilities' && (
+          <div className="utilities-tab">
+            <div className="utilities-grid">
+              <div className="utility-card utility-card-compact">
+                <div className="utility-card-header">
+                  <div className="utility-card-title">
+                    <FolderSearch size={18} />
+                    {t('utility_leftover_title')}
+                  </div>
+                  <div className="utility-card-description">{t('utility_leftover_description')}</div>
+                </div>
+                <div className="utility-card-body">
+                  <label>{t('utility_leftover_app_label')}</label>
+                  <select
+                    className="utility-select"
+                    value={leftoverAppId}
+                    onChange={(e) => setLeftoverAppId(e.target.value)}
+                  >
+                    <option value="">{t('utility_leftover_select_placeholder')}</option>
+                    {installedApps.map(app => (
+                      <option key={app.Id} value={app.Name || app.Id}>
+                        {app.Name || app.Id}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    className="utility-btn"
+                    onClick={handleScanLeftovers}
+                    disabled={leftoverLoading}
+                  >
+                    {leftoverLoading ? t('utility_scanning') : t('utility_leftover_scan')}
+                  </button>
+                  {leftoverResult && (
+                    <div className="utility-result">
+                      <div className="utility-result-row">
+                        <span>{t('utility_leftover_files')}</span>
+                        <span>{leftoverResult.files.length}</span>
+                      </div>
+                      <div className="utility-result-row">
+                        <span>{t('utility_leftover_registry')}</span>
+                        <span>{leftoverResult.registry.length}</span>
+                      </div>
+                      {(leftoverResult.files.length > 0 || leftoverResult.registry.length > 0) && (
+                        <div className="utility-result-list">
+                          {leftoverResult.files.slice(0, 5).map((item) => (
+                            <div key={item} className="utility-result-item">{item}</div>
+                          ))}
+                          {leftoverResult.registry.slice(0, 5).map((item) => (
+                            <div key={item} className="utility-result-item">{item}</div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="utility-card">
+                <div className="utility-card-header">
+                  <div className="utility-card-title">
+                    <Monitor size={18} />
+                    {t('utility_startup_title')}
+                  </div>
+                  <div className="utility-card-description">{t('utility_startup_description')}</div>
+                </div>
+                <div className="utility-card-body">
+                  <button
+                    className="utility-btn secondary"
+                    onClick={fetchStartupPrograms}
+                    disabled={startupLoading}
+                  >
+                    {startupLoading ? t('utility_loading') : t('utility_refresh')}
+                  </button>
+                  {startupError && (
+                    <div className="utility-error">{startupError}</div>
+                  )}
+                  {startupPrograms.length === 0 && !startupLoading ? (
+                    <div className="utility-empty">{t('utility_no_startup_programs')}</div>
+                  ) : (
+                    <div className="utility-list">
+                      {startupPrograms.map((program) => {
+                        const impact = getStartupImpact(program);
+                        return (
+                          <div key={`${program.Name}-${program.Command}`} className="utility-list-item">
+                            <div className="utility-list-info">
+                              <span className="utility-list-name">{program.Name}</span>
+                              <span className="utility-list-sub">{program.Location}</span>
+                            </div>
+                            <span className={`impact-badge ${impact.level}`}>
+                              {impact.level === 'high' && t('startup_impact_high')}
+                              {impact.level === 'medium' && t('startup_impact_medium')}
+                              {impact.level === 'low' && t('startup_impact_low')}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="utility-card">
+                <div className="utility-card-header">
+                  <div className="utility-card-title">
+                    <AlertTriangle size={18} />
+                    {t('utility_device_title')}
+                  </div>
+                  <div className="utility-card-description">{t('utility_device_description')}</div>
+                </div>
+                <div className="utility-card-body">
+                  <div className="utility-actions">
+                    <button className="utility-btn secondary" onClick={handleOpenDeviceManager}>
+                      {t('utility_device_open')}
+                    </button>
+                    <button className="utility-btn" onClick={handleScanDeviceIssues} disabled={deviceScanLoading}>
+                      {deviceScanLoading ? t('utility_scanning') : t('utility_device_scan')}
+                    </button>
+                  </div>
+                  {deviceIssues.length === 0 && !deviceScanLoading ? (
+                    <div className="utility-empty">{t('utility_device_no_issues')}</div>
+                  ) : (
+                    <div className="utility-list">
+                      {deviceIssues.map((issue) => (
+                        <div key={issue.InstanceId || issue.FriendlyName} className="utility-list-item">
+                          <div className="utility-list-info">
+                            <span className="utility-list-name">{issue.FriendlyName || t('utility_device_unknown')}</span>
+                            <span className="utility-list-sub">{issue.Class || ''}</span>
+                          </div>
+                          <span className="impact-badge high">{issue.Status || 'Error'}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="utility-card">
+                <div className="utility-card-header">
+                  <div className="utility-card-title">
+                    <ShieldAlert size={18} />
+                    {t('utility_hosts_title')}
+                  </div>
+                  <div className="utility-card-description">{t('utility_hosts_description')}</div>
+                </div>
+                <div className="utility-card-body">
+                  <label className="utility-toggle">
+                    <input
+                      type="checkbox"
+                      checked={hostsAdsEnabled}
+                      disabled={hostsLoading}
+                      onChange={(e) => handleToggleHostsBlocklist('ads', e.target.checked)}
+                    />
+                    <span>{t('utility_hosts_ads')}</span>
+                  </label>
+                  <label className="utility-toggle">
+                    <input
+                      type="checkbox"
+                      checked={hostsTelemetryEnabled}
+                      disabled={hostsLoading}
+                      onChange={(e) => handleToggleHostsBlocklist('telemetry', e.target.checked)}
+                    />
+                    <span>{t('utility_hosts_telemetry')}</span>
+                  </label>
+                </div>
+              </div>
+
+              <div className="utility-card">
+                <div className="utility-card-header">
+                  <div className="utility-card-title">
+                    <ShieldCheck size={18} />
+                    {t('utility_firewall_title')}
+                  </div>
+                  <div className="utility-card-description">{t('utility_firewall_description')}</div>
+                </div>
+                <div className="utility-card-body">
+                  <label className="utility-toggle">
+                    <input
+                      type="checkbox"
+                      checked={firewallEnabled}
+                      disabled={firewallLoading}
+                      onChange={(e) => handleTogglePrivacyFirewall(e.target.checked)}
+                    />
+                    <span>{t('utility_firewall_toggle')}</span>
+                  </label>
+                </div>
+              </div>
+
+              <div className="utility-card">
+                <div className="utility-card-header">
+                  <div className="utility-card-title">
+                    <HardDrive size={18} />
+                    {t('utility_storage_title')}
+                  </div>
+                  <div className="utility-card-description">{t('utility_storage_description')}</div>
+                </div>
+                <div className="utility-card-body">
+                  <label>{t('utility_storage_profile')}</label>
+                  <select
+                    className="utility-select"
+                    value={storageProfile}
+                    onChange={(e) => setStorageProfile(e.target.value as 'light' | 'balanced' | 'aggressive')}
+                  >
+                    <option value="light">{t('utility_storage_light')}</option>
+                    <option value="balanced">{t('utility_storage_balanced')}</option>
+                    <option value="aggressive">{t('utility_storage_aggressive')}</option>
+                  </select>
+                  <div className="utility-actions">
+                    <button className="utility-btn" onClick={handleApplyStorageProfile} disabled={storageLoading}>
+                      {storageLoading ? t('utility_applying') : t('utility_storage_apply')}
+                    </button>
+                    <button className="utility-btn secondary" onClick={handleDisableStorageSense} disabled={storageLoading}>
+                      {t('utility_storage_disable')}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="utility-card">
+                <div className="utility-card-header">
+                  <div className="utility-card-title">
+                    <ShieldAlert size={18} />
+                    {t('utility_privacy_audit_title')}
+                  </div>
+                  <div className="utility-card-description">{t('utility_privacy_audit_description')}</div>
+                </div>
+                <div className="utility-card-body">
+                  <button
+                    className="utility-btn"
+                    onClick={handlePrivacyAudit}
+                    disabled={privacyAuditLoading}
+                  >
+                    {privacyAuditLoading ? t('utility_scanning') : t('utility_privacy_audit_run')}
+                  </button>
+                  {privacyAudit && (
+                    <div className="utility-result">
+                      <div className="utility-result-row">
+                        <span>{t('utility_privacy_score')}</span>
+                        <span className={`impact-badge ${privacyAudit.score >= 60 ? 'high' : privacyAudit.score >= 30 ? 'medium' : 'low'}`}>
+                          {privacyAudit.score}
+                        </span>
+                      </div>
+                      <div className="utility-list">
+                        {privacyAudit.findings.map((finding) => (
+                          <div key={finding.id} className="utility-list-item">
+                            <div className="utility-list-info">
+                              <span className="utility-list-name">{finding.title}</span>
+                              <span className="utility-list-sub">{finding.detail}</span>
+                            </div>
+                            <span className={`impact-badge ${finding.enabled ? 'high' : 'low'}`}>
+                              {finding.enabled ? t('utility_privacy_enabled') : t('utility_privacy_disabled')}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="utility-card">
+                <div className="utility-card-header">
+                  <div className="utility-card-title">
+                    <ShieldAlert size={18} />
+                    {t('utility_hidden_services_title')}
+                  </div>
+                  <div className="utility-card-description">{t('utility_hidden_services_description')}</div>
+                </div>
+                <div className="utility-card-body">
+                  <button
+                    className="utility-btn"
+                    onClick={handleScanHiddenServices}
+                    disabled={hiddenServicesLoading}
+                  >
+                    {hiddenServicesLoading ? t('utility_scanning') : t('utility_hidden_services_scan')}
+                  </button>
+                  {hiddenServices.length === 0 && !hiddenServicesLoading ? (
+                    <div className="utility-empty">{t('utility_hidden_services_empty')}</div>
+                  ) : (
+                    <div className="utility-list">
+                      {hiddenServices.map((service) => (
+                        <div key={service.Name || service.DisplayName} className="utility-list-item">
+                          <div className="utility-list-info">
+                            <span className="utility-list-name">{service.DisplayName || service.Name}</span>
+                            <span className="utility-list-sub">{service.PathName || ''}</span>
+                          </div>
+                          <span className="impact-badge medium">{service.State || 'Running'}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="utility-card">
+                <div className="utility-card-header">
+                  <div className="utility-card-title">
+                    <FolderSearch size={18} />
+                    {t('utility_junk_origin_title')}
+                  </div>
+                  <div className="utility-card-description">{t('utility_junk_origin_description')}</div>
+                </div>
+                <div className="utility-card-body">
+                  <button
+                    className="utility-btn"
+                    onClick={handleAnalyzeJunkOrigins}
+                    disabled={junkOriginsLoading}
+                  >
+                    {junkOriginsLoading ? t('utility_scanning') : t('utility_junk_origin_scan')}
+                  </button>
+                  {junkOrigins.length === 0 && !junkOriginsLoading ? (
+                    <div className="utility-empty">{t('utility_junk_origin_empty')}</div>
+                  ) : (
+                    <div className="utility-list">
+                      {junkOrigins.map((item) => (
+                        <div key={`${item.Name}-${item.Path}`} className="utility-list-item">
+                          <div className="utility-list-info">
+                            <span className="utility-list-name">{item.Name}</span>
+                            <span className="utility-list-sub">{item.Path || ''}</span>
+                          </div>
+                          <span className="impact-badge medium">{item.SizeMB || 0} MB</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="utility-card">
+                <div className="utility-card-header">
+                  <div className="utility-card-title">
+                    <HardDrive size={18} />
+                    {t('utility_power_audio_title')}
+                  </div>
+                  <div className="utility-card-description">{t('utility_power_audio_description')}</div>
+                </div>
+                <div className="utility-card-body">
+                  <div className="utility-actions">
+                    <button
+                      className="utility-btn"
+                      onClick={handleApplyPowerAudio}
+                      disabled={powerAudioLoading}
+                    >
+                      {powerAudioLoading ? t('utility_applying') : t('utility_power_audio_apply')}
+                    </button>
+                    <button
+                      className="utility-btn secondary"
+                      onClick={handleRevertPowerAudio}
+                      disabled={powerAudioLoading}
+                    >
+                      {t('utility_power_audio_revert')}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="utility-card">
+                <div className="utility-card-header">
+                  <div className="utility-card-title">
+                    <Monitor size={18} />
+                    {t('utility_app_monitor_title')}
+                  </div>
+                  <div className="utility-card-description">{t('utility_app_monitor_description')}</div>
+                </div>
+                <div className="utility-card-body">
+                  <button
+                    className="utility-btn"
+                    onClick={handleMonitorAppUsage}
+                    disabled={appUsageLoading}
+                  >
+                    {appUsageLoading ? t('utility_scanning') : t('utility_app_monitor_refresh')}
+                  </button>
+                  {appUsage.length === 0 && !appUsageLoading ? (
+                    <div className="utility-empty">{t('utility_app_monitor_empty')}</div>
+                  ) : (
+                    <div className="utility-list">
+                      {appUsage.map((item) => (
+                        <div key={item.Name} className="utility-list-item">
+                          <div className="utility-list-info">
+                            <span className="utility-list-name">{item.Name}</span>
+                            <span className="utility-list-sub">{t('utility_app_monitor_memory', { value: item.MemoryMB || 0 })}</span>
+                          </div>
+                          <span className="impact-badge medium">{t('utility_app_monitor_cpu', { value: item.Cpu || 0 })}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
           </div>
         )}
       </div>

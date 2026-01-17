@@ -13,6 +13,57 @@ fn check_auth() -> Result<(), String> {
     Ok(())
 }
 
+fn hosts_blocklist_domains(list_type: &str) -> Result<(&'static str, Vec<&'static str>), String> {
+    match list_type {
+        "ads" => Ok((
+            "ADS",
+            vec![
+                "ads.google.com",
+                "adservice.google.com",
+                "adservice.google.com.tr",
+                "doubleclick.net",
+                "ads.yahoo.com",
+                "ads.twitter.com",
+                "ads.microsoft.com",
+                "adnxs.com",
+                "adsymptotic.com",
+                "adsystem.com"
+            ]
+        )),
+        "telemetry" => Ok((
+            "TELEMETRY",
+            vec![
+                "vortex.data.microsoft.com",
+                "vortex-win.data.microsoft.com",
+                "telemetry.microsoft.com",
+                "settings-win.data.microsoft.com",
+                "watson.telemetry.microsoft.com",
+                "oca.telemetry.microsoft.com",
+                "sqm.telemetry.microsoft.com",
+                "telecommand.telemetry.microsoft.com",
+                "telecommand.telemetry.microsoft.com.nsatc.net",
+                "wes.df.telemetry.microsoft.com"
+            ]
+        )),
+        _ => Err("Gecersiz blok listesi".to_string())
+    }
+}
+
+fn privacy_firewall_domains() -> Vec<&'static str> {
+    vec![
+        "vortex.data.microsoft.com",
+        "vortex-win.data.microsoft.com",
+        "telemetry.microsoft.com",
+        "settings-win.data.microsoft.com",
+        "watson.telemetry.microsoft.com",
+        "oca.telemetry.microsoft.com",
+        "sqm.telemetry.microsoft.com",
+        "telecommand.telemetry.microsoft.com",
+        "telecommand.telemetry.microsoft.com.nsatc.net",
+        "wes.df.telemetry.microsoft.com"
+    ]
+}
+
 static CLONE_MESSAGES_CANCELLED: AtomicBool = AtomicBool::new(false);
 static DISCORD_CLONE_CANCELLED: AtomicBool = AtomicBool::new(false);
 
@@ -461,7 +512,7 @@ pub async fn list_startup_programs() -> Result<String, String> {
         $startup = Get-CimInstance Win32_StartupCommand
         $startup | Select-Object Name, Command, Location | ConvertTo-Json -Compress
     "#;
-    run_powershell_internal(command.to_string(), false, false).await
+    run_powershell_no_rate_limit(command.to_string()).await
 }
 
 #[tauri::command]
@@ -948,6 +999,408 @@ pub async fn block_adobe_network() -> Result<String, String> {
         "Adobe network blocked successfully"
     "#;
     run_powershell_internal(command.to_string(), false, false).await
+}
+
+#[tauri::command]
+pub async fn apply_hosts_blocklist(list_type: String) -> Result<String, String> {
+    check_auth()?;
+
+    let list_key = list_type.trim().to_lowercase();
+    let (marker, domains) = hosts_blocklist_domains(&list_key)?;
+    let domains_literal = domains
+        .iter()
+        .map(|domain| format!("\"{}\"", domain))
+        .collect::<Vec<_>>()
+        .join(", ");
+
+    let command = format!(
+        r#"
+        $hostsPath = "$env:SystemRoot\System32\drivers\etc\hosts"
+        $start = '# ConfUtils Blocklist {marker} Start'
+        $end = '# ConfUtils Blocklist {marker} End'
+        $domains = @({domains_literal})
+        $content = Get-Content $hostsPath -ErrorAction SilentlyContinue
+        $filtered = @()
+        $inBlock = $false
+        foreach ($line in $content) {{
+            if ($line -eq $start) {{ $inBlock = $true; continue }}
+            if ($line -eq $end) {{ $inBlock = $false; continue }}
+            if (-not $inBlock) {{ $filtered += $line }}
+        }}
+        $block = @()
+        $block += $start
+        foreach ($domain in $domains) {{
+            $block += "0.0.0.0 $domain"
+        }}
+        $block += $end
+        $final = $filtered + $block
+        Set-Content -Path $hostsPath -Value $final -Encoding ASCII
+        ipconfig /flushdns | Out-Null
+        "Hosts blocklist applied: {marker} ({count})"
+    "#,
+        marker = marker,
+        domains_literal = domains_literal,
+        count = domains.len()
+    );
+
+    run_powershell_internal(command.to_string(), false, false).await
+}
+
+#[tauri::command]
+pub async fn remove_hosts_blocklist(list_type: String) -> Result<String, String> {
+    check_auth()?;
+
+    let list_key = list_type.trim().to_lowercase();
+    let (marker, _) = hosts_blocklist_domains(&list_key)?;
+    let command = format!(
+        r#"
+        $hostsPath = "$env:SystemRoot\System32\drivers\etc\hosts"
+        $start = '# ConfUtils Blocklist {marker} Start'
+        $end = '# ConfUtils Blocklist {marker} End'
+        $content = Get-Content $hostsPath -ErrorAction SilentlyContinue
+        $filtered = @()
+        $inBlock = $false
+        foreach ($line in $content) {{
+            if ($line -eq $start) {{ $inBlock = $true; continue }}
+            if ($line -eq $end) {{ $inBlock = $false; continue }}
+            if (-not $inBlock) {{ $filtered += $line }}
+        }}
+        Set-Content -Path $hostsPath -Value $filtered -Encoding ASCII
+        ipconfig /flushdns | Out-Null
+        "Hosts blocklist removed: {marker}"
+    "#,
+        marker = marker
+    );
+
+    run_powershell_internal(command.to_string(), false, false).await
+}
+
+#[tauri::command]
+pub async fn get_hosts_blocklist_status(list_type: String) -> Result<String, String> {
+    check_auth()?;
+
+    let list_key = list_type.trim().to_lowercase();
+    let (marker, _) = hosts_blocklist_domains(&list_key)?;
+    let command = format!(
+        r#"
+        $hostsPath = "$env:SystemRoot\System32\drivers\etc\hosts"
+        $start = '# ConfUtils Blocklist {marker} Start'
+        $content = Get-Content $hostsPath -ErrorAction SilentlyContinue
+        if ($content -contains $start) {{ "true" }} else {{ "false" }}
+    "#,
+        marker = marker
+    );
+
+    run_powershell_no_rate_limit(command.to_string()).await
+}
+
+#[tauri::command]
+pub async fn apply_privacy_firewall_rules() -> Result<String, String> {
+    check_auth()?;
+
+    let domains = privacy_firewall_domains()
+        .iter()
+        .map(|domain| format!("\"{}\"", domain))
+        .collect::<Vec<_>>()
+        .join(", ");
+
+    let command = format!(
+        r#"
+        $ruleName = "ConfUtils Telemetry Block"
+        Get-NetFirewallRule -DisplayName $ruleName -ErrorAction SilentlyContinue | Remove-NetFirewallRule -ErrorAction SilentlyContinue
+        $domains = @({domains})
+        $ips = @()
+        foreach ($domain in $domains) {{
+            $records = Resolve-DnsName -Name $domain -Type A -ErrorAction SilentlyContinue
+            foreach ($record in $records) {{
+                if ($record.IPAddress) {{ $ips += $record.IPAddress }}
+            }}
+        }}
+        $ips = $ips | Sort-Object -Unique
+        if ($ips.Count -eq 0) {{
+            "Firewall rule not applied. No IPs resolved."
+        }} else {{
+            New-NetFirewallRule -DisplayName $ruleName -Group "ConfUtils Privacy" -Direction Outbound -Action Block -RemoteAddress ($ips -join ",") -Profile Any | Out-Null
+            "Privacy firewall rules applied. Blocked IPs: " + $ips.Count
+        }}
+    "#,
+        domains = domains
+    );
+
+    run_powershell_internal(command.to_string(), false, false).await
+}
+
+#[tauri::command]
+pub async fn remove_privacy_firewall_rules() -> Result<String, String> {
+    check_auth()?;
+
+    let command = r#"
+        $ruleName = "ConfUtils Telemetry Block"
+        Get-NetFirewallRule -DisplayName $ruleName -ErrorAction SilentlyContinue | Remove-NetFirewallRule -ErrorAction SilentlyContinue
+        "Privacy firewall rules removed"
+    "#;
+
+    run_powershell_internal(command.to_string(), false, false).await
+}
+
+#[tauri::command]
+pub async fn get_privacy_firewall_status() -> Result<String, String> {
+    check_auth()?;
+
+    let command = r#"
+        $ruleName = "ConfUtils Telemetry Block"
+        $rule = Get-NetFirewallRule -DisplayName $ruleName -ErrorAction SilentlyContinue
+        if ($rule) { "true" } else { "false" }
+    "#;
+
+    run_powershell_no_rate_limit(command.to_string()).await
+}
+
+#[tauri::command]
+pub async fn open_device_manager() -> Result<String, String> {
+    check_auth()?;
+    let command = r#"
+        Start-Process "devmgmt.msc"
+        "Device Manager opened"
+    "#;
+    run_powershell_internal(command.to_string(), false, false).await
+}
+
+#[tauri::command]
+pub async fn scan_device_issues() -> Result<String, String> {
+    check_auth()?;
+    let command = r#"
+        $issues = Get-PnpDevice -Status Error -ErrorAction SilentlyContinue | Select-Object FriendlyName, InstanceId, Class, Status
+        if ($issues) {
+            $issues | ConvertTo-Json -Depth 3
+        } else {
+            "[]"
+        }
+    "#;
+    run_powershell_no_rate_limit(command.to_string()).await
+}
+
+#[tauri::command]
+pub async fn scan_app_leftovers(app_name: String) -> Result<String, String> {
+    check_auth()?;
+
+    let safe_name = app_name.replace('"', "").trim().to_string();
+    if safe_name.is_empty() {
+        return Err("Uygulama adi bos olamaz".to_string());
+    }
+
+    let command = format!(
+        r#"
+        $appName = "{app_name}"
+        $paths = @()
+        $folders = @(
+            "$env:ProgramFiles",
+            "$env:ProgramFiles(x86)",
+            "$env:LOCALAPPDATA",
+            "$env:APPDATA",
+            "$env:ProgramData"
+        )
+        foreach ($base in $folders) {{
+            if (Test-Path $base) {{
+                Get-ChildItem -Path $base -Directory -ErrorAction SilentlyContinue | Where-Object {{ $_.Name -like "*$appName*" }} | ForEach-Object {{
+                    $paths += $_.FullName
+                }}
+            }}
+        }}
+        $regHits = @()
+        $regRoots = @(
+            "HKCU:\Software",
+            "HKLM:\SOFTWARE",
+            "HKLM:\SOFTWARE\WOW6432Node"
+        )
+        foreach ($root in $regRoots) {{
+            Get-ChildItem -Path $root -ErrorAction SilentlyContinue | Where-Object {{ $_.Name -like "*$appName*" }} | ForEach-Object {{
+                $regHits += $_.Name
+            }}
+        }}
+        [pscustomobject]@{{
+            files = $paths
+            registry = $regHits
+        }} | ConvertTo-Json -Depth 3
+    "#,
+        app_name = safe_name
+    );
+
+    run_powershell_no_rate_limit(command.to_string()).await
+}
+
+#[tauri::command]
+pub async fn apply_storage_sense_profile(profile: String) -> Result<String, String> {
+    check_auth()?;
+
+    let key = profile.trim().to_lowercase();
+    let (frequency, recycle_days, downloads_days, label) = match key.as_str() {
+        "light" => (30, 30, 30, "Light"),
+        "balanced" => (7, 14, 30, "Balanced"),
+        "aggressive" => (1, 7, 7, "Aggressive"),
+        _ => return Err("Gecersiz profil".to_string())
+    };
+
+    let command = format!(
+        r#"
+        $path = "HKCU:\Software\Microsoft\Windows\CurrentVersion\StorageSense\Parameters\StoragePolicy"
+        New-Item -Path $path -Force | Out-Null
+        Set-ItemProperty -Path $path -Name "01" -Value 1 -Type DWord -Force
+        Set-ItemProperty -Path $path -Name "04" -Value {frequency} -Type DWord -Force
+        Set-ItemProperty -Path $path -Name "08" -Value 1 -Type DWord -Force
+        Set-ItemProperty -Path $path -Name "32" -Value {recycle_days} -Type DWord -Force
+        Set-ItemProperty -Path $path -Name "256" -Value {downloads_days} -Type DWord -Force
+        "Storage Sense profile applied: {label}"
+    "#,
+        frequency = frequency,
+        recycle_days = recycle_days,
+        downloads_days = downloads_days,
+        label = label
+    );
+
+    run_powershell_internal(command.to_string(), false, false).await
+}
+
+#[tauri::command]
+pub async fn run_privacy_audit() -> Result<String, String> {
+    check_auth()?;
+
+    let command = r#"
+        $findings = @()
+        $score = 0
+
+        $telemetry = (Get-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\DataCollection" -Name "AllowTelemetry" -ErrorAction SilentlyContinue).AllowTelemetry
+        $telemetryEnabled = $false
+        if ($telemetry -ge 1) { $telemetryEnabled = $true; $score += 25 }
+        $findings += [pscustomobject]@{ id = "telemetry"; title = "Telemetry"; enabled = $telemetryEnabled; detail = "AllowTelemetry=" + ($telemetry -as [string]) }
+
+        $adId = (Get-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\AdvertisingInfo" -Name "Enabled" -ErrorAction SilentlyContinue).Enabled
+        $adEnabled = $false
+        if ($adId -eq 1) { $adEnabled = $true; $score += 15 }
+        $findings += [pscustomobject]@{ id = "advertising"; title = "Advertising ID"; enabled = $adEnabled; detail = "Enabled=" + ($adId -as [string]) }
+
+        $location = (Get-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\LocationAndSensors" -Name "DisableLocation" -ErrorAction SilentlyContinue).DisableLocation
+        $locationEnabled = $true
+        if ($location -eq 1) { $locationEnabled = $false } else { $score += 15 }
+        $findings += [pscustomobject]@{ id = "location"; title = "Location"; enabled = $locationEnabled; detail = "DisableLocation=" + ($location -as [string]) }
+
+        $tailored = (Get-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Privacy" -Name "TailoredExperiencesWithDiagnosticDataEnabled" -ErrorAction SilentlyContinue).TailoredExperiencesWithDiagnosticDataEnabled
+        $tailoredEnabled = $false
+        if ($tailored -eq 1) { $tailoredEnabled = $true; $score += 15 }
+        $findings += [pscustomobject]@{ id = "tailored"; title = "Tailored Experiences"; enabled = $tailoredEnabled; detail = "Enabled=" + ($tailored -as [string]) }
+
+        $errorReporting = (Get-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows\Windows Error Reporting" -Name "Disabled" -ErrorAction SilentlyContinue).Disabled
+        $errorEnabled = $true
+        if ($errorReporting -eq 1) { $errorEnabled = $false } else { $score += 10 }
+        $findings += [pscustomobject]@{ id = "error_reporting"; title = "Error Reporting"; enabled = $errorEnabled; detail = "Disabled=" + ($errorReporting -as [string]) }
+
+        if ($score -gt 100) { $score = 100 }
+        [pscustomobject]@{ score = $score; findings = $findings } | ConvertTo-Json -Depth 4
+    "#;
+
+    run_powershell_no_rate_limit(command.to_string()).await
+}
+
+#[tauri::command]
+pub async fn scan_hidden_services() -> Result<String, String> {
+    check_auth()?;
+
+    let command = r#"
+        $services = Get-CimInstance Win32_Service | Where-Object {
+            $_.State -eq "Running" -and $_.StartMode -eq "Auto"
+        } | Where-Object {
+            $_.PathName -notmatch "Windows\\System32" -and $_.PathName -notmatch "Microsoft" -and $_.PathName -notmatch "Windows\\WinSxS"
+        } | Select-Object Name, DisplayName, PathName, StartMode, State
+        $services | ConvertTo-Json -Depth 3
+    "#;
+
+    run_powershell_no_rate_limit(command.to_string()).await
+}
+
+#[tauri::command]
+pub async fn analyze_junk_origins() -> Result<String, String> {
+    check_auth()?;
+
+    let command = r#"
+        $roots = @(
+            "$env:LOCALAPPDATA",
+            "$env:APPDATA",
+            "$env:ProgramFiles",
+            "$env:ProgramFiles(x86)"
+        )
+        $items = @()
+        foreach ($root in $roots) {
+            if (Test-Path $root) {
+                Get-ChildItem -Path $root -Directory -ErrorAction SilentlyContinue | ForEach-Object {
+                    $size = 0
+                    try {
+                        $size = (Get-ChildItem -Path $_.FullName -Recurse -ErrorAction SilentlyContinue | Measure-Object -Property Length -Sum).Sum
+                    } catch {
+                        $size = 0
+                    }
+                    $items += [pscustomobject]@{
+                        Name = $_.Name
+                        Path = $_.FullName
+                        SizeMB = [math]::Round(($size / 1MB), 2)
+                    }
+                }
+            }
+        }
+        $items | Sort-Object SizeMB -Descending | Select-Object -First 20 | ConvertTo-Json -Depth 3
+    "#;
+
+    run_powershell_no_rate_limit(command.to_string()).await
+}
+
+#[tauri::command]
+pub async fn apply_power_audio_optimizations() -> Result<String, String> {
+    check_auth()?;
+
+    let command = r#"
+        powercfg /setacvalueindex SCHEME_CURRENT SUB_USB USBSELECTIVE 0
+        powercfg /setdcvalueindex SCHEME_CURRENT SUB_USB USBSELECTIVE 0
+        powercfg /setactive SCHEME_CURRENT
+        New-Item -Path "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile" -Force | Out-Null
+        Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile" -Name "NetworkThrottlingIndex" -Value 4294967295 -Type DWord -Force
+        Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile" -Name "SystemResponsiveness" -Value 10 -Type DWord -Force
+        "Power and audio optimizations applied"
+    "#;
+
+    run_powershell_internal(command.to_string(), false, false).await
+}
+
+#[tauri::command]
+pub async fn revert_power_audio_optimizations() -> Result<String, String> {
+    check_auth()?;
+
+    let command = r#"
+        powercfg /setacvalueindex SCHEME_CURRENT SUB_USB USBSELECTIVE 1
+        powercfg /setdcvalueindex SCHEME_CURRENT SUB_USB USBSELECTIVE 1
+        powercfg /setactive SCHEME_CURRENT
+        Remove-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile" -Name "NetworkThrottlingIndex" -ErrorAction SilentlyContinue
+        Remove-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile" -Name "SystemResponsiveness" -ErrorAction SilentlyContinue
+        "Power and audio optimizations reverted"
+    "#;
+
+    run_powershell_internal(command.to_string(), false, false).await
+}
+
+#[tauri::command]
+pub async fn monitor_app_usage() -> Result<String, String> {
+    check_auth()?;
+
+    let command = r#"
+        $processes = Get-Process | Select-Object Name, CPU, WorkingSet64
+        $processes | Sort-Object CPU -Descending | Select-Object -First 15 | ForEach-Object {
+            [pscustomobject]@{
+                Name = $_.Name
+                Cpu = if ($_.CPU) { [math]::Round($_.CPU, 2) } else { 0 }
+                MemoryMB = [math]::Round(($_.WorkingSet64 / 1MB), 2)
+            }
+        } | ConvertTo-Json -Depth 3
+    "#;
+
+    run_powershell_no_rate_limit(command.to_string()).await
 }
 
 #[tauri::command]

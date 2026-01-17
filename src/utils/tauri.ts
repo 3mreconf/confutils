@@ -217,6 +217,74 @@ export const setDns = async (dnsType: string): Promise<string> => {
   return await invoke<string>('set_dns', { dnsType });
 };
 
+export const applyHostsBlocklist = async (listType: 'ads' | 'telemetry'): Promise<string> => {
+  return await invoke<string>('apply_hosts_blocklist', { listType });
+};
+
+export const removeHostsBlocklist = async (listType: 'ads' | 'telemetry'): Promise<string> => {
+  return await invoke<string>('remove_hosts_blocklist', { listType });
+};
+
+export const getHostsBlocklistStatus = async (listType: 'ads' | 'telemetry'): Promise<string> => {
+  return await invoke<string>('get_hosts_blocklist_status', { listType });
+};
+
+export const applyPrivacyFirewallRules = async (): Promise<string> => {
+  return await invoke<string>('apply_privacy_firewall_rules');
+};
+
+export const removePrivacyFirewallRules = async (): Promise<string> => {
+  return await invoke<string>('remove_privacy_firewall_rules');
+};
+
+export const getPrivacyFirewallStatus = async (): Promise<string> => {
+  return await invoke<string>('get_privacy_firewall_status');
+};
+
+export const openDeviceManager = async (): Promise<string> => {
+  return await invoke<string>('open_device_manager');
+};
+
+export const scanDeviceIssues = async (): Promise<string> => {
+  return await invoke<string>('scan_device_issues');
+};
+
+export const scanAppLeftovers = async (appName: string): Promise<string> => {
+  return await invoke<string>('scan_app_leftovers', { appName });
+};
+
+export const applyStorageSenseProfile = async (profile: 'light' | 'balanced' | 'aggressive'): Promise<string> => {
+  return await invoke<string>('apply_storage_sense_profile', { profile });
+};
+
+export const runPrivacyAudit = async (): Promise<string> => {
+  return await invoke<string>('run_privacy_audit');
+};
+
+export const disableStorageSense = async (): Promise<string> => {
+  return await invoke<string>('disable_storage_sense');
+};
+
+export const scanHiddenServices = async (): Promise<string> => {
+  return await invoke<string>('scan_hidden_services');
+};
+
+export const analyzeJunkOrigins = async (): Promise<string> => {
+  return await invoke<string>('analyze_junk_origins');
+};
+
+export const applyPowerAudioOptimizations = async (): Promise<string> => {
+  return await invoke<string>('apply_power_audio_optimizations');
+};
+
+export const revertPowerAudioOptimizations = async (): Promise<string> => {
+  return await invoke<string>('revert_power_audio_optimizations');
+};
+
+export const monitorAppUsage = async (): Promise<string> => {
+  return await invoke<string>('monitor_app_usage');
+};
+
 export const getActiveConnections = async (): Promise<string> => {
   return await invoke<string>('get_active_connections');
 };
