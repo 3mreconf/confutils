@@ -77,7 +77,7 @@ export const BulkDeleteModal: React.FC<BulkDeleteModalProps> = ({ modalId }) => 
         userToken,
         channelId,
         limit,
-        delayMs: BigInt(delayMs)
+        delayMs
       });
 
       showNotification('success', t('success'), result);

@@ -191,8 +191,6 @@ fn main() {
             commands::spam_webhook,
             commands::stop_webhook_spam,
             commands::delete_webhook,
-            commands::scrape_guild_members,
-            commands::cancel_member_scraper,
             commands::backup_guild,
             commands::restore_guild,
             commands::change_hypesquad_house,

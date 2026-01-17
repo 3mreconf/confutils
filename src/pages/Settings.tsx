@@ -182,6 +182,7 @@ const Settings = () => {
     );
   };
 
+
   const handleLanguageChange = (selectedLanguage: string) => {
     setLanguage(selectedLanguage);
     saveSettings({ language: selectedLanguage });

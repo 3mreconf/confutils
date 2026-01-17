@@ -1821,13 +1821,6 @@
   "discord_authentication": "Authentication",
   "discord_total_members": "Total Members",
 
-  "discord_member_scraper": "Member Scraper",
-  "discord_member_scraper_title": "Member Scraper",
-  "discord_member_scraper_description": "Extract and export server member list with details",
-  "discord_member_scraper_info_title": "Member Scraper Information",
-  "discord_member_scraper_info_1": "Exports all server members to a file",
-  "discord_member_scraper_info_2": "Includes usernames, IDs, roles, and join dates",
-  "discord_member_scraper_info_3": "Large servers may take several minutes",
   "discord_guild_id": "Server (Guild) ID",
   "discord_scraper_options": "Scraper Options",
   "discord_option_include_roles": "Include Roles",

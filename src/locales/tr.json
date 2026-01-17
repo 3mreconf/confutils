@@ -1819,13 +1819,6 @@
   "discord_authentication": "Kimlik Doğrulama",
   "discord_total_members": "Toplam Üye",
 
-  "discord_member_scraper": "Üye Tarayıcı",
-  "discord_member_scraper_title": "Üye Tarayıcı",
-  "discord_member_scraper_description": "Sunucu üye listesini detaylarıyla çıkart ve dışa aktar",
-  "discord_member_scraper_info_title": "Üye Tarayıcı Bilgisi",
-  "discord_member_scraper_info_1": "Tüm sunucu üyelerini dosyaya aktarır",
-  "discord_member_scraper_info_2": "Kullanıcı adları, ID'ler, roller ve katılma tarihleri dahil",
-  "discord_member_scraper_info_3": "Büyük sunucular birkaç dakika sürebilir",
   "discord_guild_id": "Sunucu (Guild) ID",
   "discord_scraper_options": "Tarayıcı Seçenekleri",
   "discord_option_include_roles": "Rolleri Dahil Et",

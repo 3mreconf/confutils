@@ -415,18 +415,6 @@ export const grabDiscordAvatar = async (userToken: string, userId: string, size:
   return await invoke<string>('grab_avatar', { userToken, userId, size });
 };
 
-export const scrapeGuildMembers = async (
-  userToken: string,
-  guildId: string,
-  options: any
-): Promise<string> => {
-  return await invoke<string>('scrape_guild_members', { userToken, guildId, options });
-};
-
-export const cancelMemberScraper = async (): Promise<string> => {
-  return await invoke<string>('cancel_member_scraper');
-};
-
 export const spamReactions = async (
   userToken: string,
   channelId: string,

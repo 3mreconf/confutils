@@ -1,11 +1,26 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Info, Shield, Globe, MessageSquare, ExternalLink, Github, FileText } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { open } from '@tauri-apps/plugin-shell';
+import { getVersion } from '@tauri-apps/api/app';
 import './About.css';
 
 const About: React.FC = () => {
   const { t } = useLanguage();
+  const [appVersion, setAppVersion] = useState<string | null>(null);
+
+  useEffect(() => {
+    const loadVersion = async () => {
+      try {
+        const version = await getVersion();
+        setAppVersion(version);
+      } catch {
+        setAppVersion(null);
+      }
+    };
+
+    loadVersion();
+  }, []);
 
   const handleOpenLink = async (url: string) => {
     await open(url);
@@ -24,7 +39,7 @@ const About: React.FC = () => {
             <Shield size={64} />
           </div>
           <h1 className="app-name">ConfUtils</h1>
-          <p className="app-version">Version 2.0.0</p>
+          <p className="app-version">Version {appVersion || '2.0.0'}</p>
         </div>
 
         <div className="about-sections">

@@ -1,6 +1,6 @@
 import React from 'react';
 import { UtilityCard } from '../components/Cards/UtilityCard';
-import { Server, MessageSquare, Smile, User, Trash2, Mail, Eraser, Shield, CheckCircle, Info, Image, Webhook, Users, HardDrive, Sparkles, Gamepad2 } from 'lucide-react';
+import { Server, MessageSquare, Smile, User, Trash2, Mail, Eraser, Shield, CheckCircle, Info, Image, Webhook, HardDrive, Sparkles, Gamepad2 } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useModal } from '../contexts/ModalContext';
 import { DiscordClonerModal } from '../components/Discord/DiscordClonerModal';
@@ -16,7 +16,6 @@ import { TokenInfoModal } from '../components/Discord/TokenInfoModal';
 import { AvatarGrabberModal } from '../components/Discord/AvatarGrabberModal';
 import { WebhookSpammerModal } from '../components/Discord/WebhookSpammerModal';
 import { WebhookDeleterModal } from '../components/Discord/WebhookDeleterModal';
-import { MemberScraperModal } from '../components/Discord/MemberScraperModal';
 import { ServerBackupModal } from '../components/Discord/ServerBackupModal';
 import { HypesquadChangerModal } from '../components/Discord/HypesquadChangerModal';
 import { CustomRPCModal } from '../components/Discord/CustomRPCModal';
@@ -143,14 +142,6 @@ const Discord: React.FC = () => {
     );
   };
 
-  const handleOpenMemberScraper = () => {
-    openModal(
-      'member-scraper',
-      t('discord_member_scraper_title'),
-      <MemberScraperModal modalId="member-scraper" />,
-      t('discord_member_scraper_description')
-    );
-  };
 
   const handleOpenServerBackup = () => {
     openModal(
@@ -250,16 +241,6 @@ const Discord: React.FC = () => {
         />
 
         
-        <UtilityCard
-          icon={Users}
-          title={t('discord_member_scraper_title')}
-          description={t('discord_member_scraper_description')}
-          actionType="button"
-          variant="info"
-          actionLabel={t('discord_open_tool')}
-          onClick={handleOpenMemberScraper}
-        />
-
         <UtilityCard
           icon={User}
           title={t('discord_nickname_changer_title')}

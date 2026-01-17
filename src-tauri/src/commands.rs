@@ -15,7 +15,74 @@ fn check_auth() -> Result<(), String> {
 
 static CLONE_MESSAGES_CANCELLED: AtomicBool = AtomicBool::new(false);
 static DISCORD_CLONE_CANCELLED: AtomicBool = AtomicBool::new(false);
-static MEMBER_SCRAPER_CANCELLED: AtomicBool = AtomicBool::new(false);
+
+async fn resolve_discord_auth(
+    client: &reqwest::Client,
+    base_url: &str,
+    token: &str,
+) -> Result<(String, Option<String>), String> {
+    use serde_json::Value;
+
+    let trimmed = token.trim();
+    let mut candidates = Vec::new();
+    let lower = trimmed.to_lowercase();
+    if lower.starts_with("bot ") {
+        let without_prefix = trimmed[4..].trim().to_string();
+        candidates.push(format!("Bot {}", without_prefix));
+        if !without_prefix.is_empty() {
+            candidates.push(without_prefix);
+        }
+    } else {
+        candidates.push(trimmed.to_string());
+        candidates.push(format!("Bot {}", trimmed));
+    }
+
+    for auth_token in candidates {
+        let me_url = format!("{}/users/@me", base_url);
+        let resp = client
+            .get(&me_url)
+            .header("Authorization", &auth_token)
+            .header("Content-Type", "application/json")
+            .send()
+            .await;
+
+        match resp {
+            Ok(r) => {
+                if r.status().is_success() {
+                    let me_data: Value = r
+                        .json()
+                        .await
+                        .map_err(|e| format!("Yanıt parse edilemedi: {}", e))?;
+                    let id = me_data["id"].as_str().unwrap_or("").to_string();
+                    let user_id = if id.is_empty() { None } else { Some(id) };
+                    return Ok((auth_token, user_id));
+                }
+
+                if r.status().as_u16() == 401 || r.status().as_u16() == 403 {
+                    continue;
+                }
+
+                let status = r.status();
+                let error_text = r.text().await.unwrap_or_else(|_| "Bilinmeyen hata".to_string());
+                return Err(format!(
+                    "Kullanıcı bilgisi alınamadı (Status {}): {}",
+                    status, error_text
+                ));
+            }
+            Err(e) => {
+                if e.is_timeout() {
+                    return Err("Discord API yanıt vermiyor (timeout). Lütfen tekrar deneyin.".to_string());
+                }
+                if e.is_connect() {
+                    return Err("Discord API'ye bağlanılamıyor. İnternet bağlantınızı kontrol edin.".to_string());
+                }
+                return Err(format!("İstek başarısız: {}", e));
+            }
+        }
+    }
+
+    Err("Token geçersiz veya süresi dolmuş. Lütfen geçerli bir token girin.".to_string())
+}
 
 async fn run_powershell_internal(command: String, skip_rate_limit: bool, skip_security_check: bool) -> Result<String, String> {
     let sanitized = if skip_security_check {
@@ -3039,6 +3106,7 @@ pub async fn dm_bomber(
 
     let client = reqwest::Client::new();
     let base_url = "https://discord.com/api/v10";
+    let (auth_token, _) = resolve_discord_auth(&client, base_url, &user_token).await?;
     let mut total_sent = 0;
 
     let emit_log = |msg: String| {
@@ -3065,39 +3133,7 @@ pub async fn dm_bomber(
             }
         };
 
-        emit_log(format!("[INFO] Kullanıcı doğrulanıyor: {}", user_id_parsed));
-
-        let user_check = client
-            .get(&format!("{}/users/{}", base_url, user_id_parsed))
-            .header("Authorization", &user_token)
-            .send()
-            .await;
-
-        match user_check {
-            Ok(user_resp) => {
-                if !user_resp.status().is_success() {
-                    let status = user_resp.status();
-                    let error_text = user_resp.text().await.unwrap_or_else(|_| "Bilinmeyen hata".to_string());
-                    
-                    if status == 404 {
-                        emit_log(format!("[ERROR] Kullanıcı bulunamadı (404): {} - Bu kullanıcı ID'si geçersiz veya kullanıcı Discord'da yok", user_id_parsed));
-                    } else if status == 403 {
-                        emit_log(format!("[ERROR] Kullanıcı doğrulanamadı (403 Forbidden): {} - Token'ın bu kullanıcıyı görme yetkisi yok. Bot token kullanmanız gerekebilir.", user_id_parsed));
-                    } else if status == 401 {
-                        emit_log(format!("[ERROR] Token geçersiz (401): {} - Token geçersiz veya süresi dolmuş", user_id_parsed));
-                    } else {
-                        emit_log(format!("[ERROR] Kullanıcı doğrulanamadı ({}): {}", status, error_text));
-                    }
-                    continue;
-                }
-            }
-            Err(e) => {
-                emit_log(format!("[ERROR] Kullanıcı doğrulama isteği başarısız: {} - User ID: {}", e, user_id_parsed));
-                continue;
-            }
-        }
-
-        emit_log(format!("[+] Kullanıcı doğrulandı: {}", user_id_parsed));
+        emit_log(format!("[INFO] Kullanıcı hedefleniyor: {}", user_id_parsed));
 
         let dm_payload = serde_json::json!({
             "recipient_id": user_id_parsed
@@ -3105,7 +3141,7 @@ pub async fn dm_bomber(
 
         let dm_resp = client
             .post(&format!("{}/users/@me/channels", base_url))
-            .header("Authorization", &user_token)
+            .header("Authorization", &auth_token)
             .header("Content-Type", "application/json")
             .json(&dm_payload)
             .send()
@@ -3132,7 +3168,7 @@ pub async fn dm_bomber(
 
                                 match client
                                     .post(&format!("{}/channels/{}/messages", base_url, channel_id))
-                                    .header("Authorization", &user_token)
+                                    .header("Authorization", &auth_token)
                                     .header("Content-Type", "application/json")
                                     .json(&msg_payload)
                                     .send()
@@ -3220,6 +3256,7 @@ pub async fn purge_channel(
     let client = reqwest::Client::new();
     let base_url = "https://discord.com/api/v10";
     let mut deleted = 0;
+    let (auth_token, current_user_id) = resolve_discord_auth(&client, base_url, &user_token).await?;
 
     let emit_log = |msg: String| {
         let _ = app.emit("purge-log", msg);
@@ -3232,7 +3269,7 @@ pub async fn purge_channel(
 
     match client
         .get(&messages_url)
-        .header("Authorization", &user_token)
+        .header("Authorization", &auth_token)
         .send()
         .await
     {
@@ -3254,7 +3291,7 @@ pub async fn purge_channel(
 
                             match client
                                 .post(&delete_url)
-                                .header("Authorization", &user_token)
+                                .header("Authorization", &auth_token)
                                 .header("Content-Type", "application/json")
                                 .json(&bulk_payload)
                                 .send()
@@ -3264,8 +3301,56 @@ pub async fn purge_channel(
                                     if del_resp.status().is_success() || del_resp.status().as_u16() == 204 {
                                         deleted = message_ids.len();
                                         emit_log(format!("[✓] Purged {} messages", deleted));
+                                    } else if del_resp.status().as_u16() == 403 {
+                                        let current_user_id = current_user_id.clone().ok_or_else(|| {
+                                            "Kullanıcı ID'si alınamadı. Token geçersiz olabilir.".to_string()
+                                        })?;
+                                        emit_log("[WARNING] Bulk delete izni yok. Sadece kendi mesajlarınız silinecek.".to_string());
+                                        for msg in messages.iter() {
+                                            let msg_id = msg["id"].as_str().unwrap_or("");
+                                            let author_id = msg["author"]["id"].as_str().unwrap_or("");
+                                            if author_id == current_user_id {
+                                                let delete_url = format!("{}/channels/{}/messages/{}", base_url, channel_id, msg_id);
+                                                if let Ok(del_resp) = client
+                                                    .delete(&delete_url)
+                                                    .header("Authorization", &auth_token)
+                                                    .send()
+                                                    .await
+                                                {
+                                                    if del_resp.status().is_success() || del_resp.status().as_u16() == 204 {
+                                                        deleted += 1;
+                                                        emit_log(format!("[+] Deleted message {}/{}", deleted, message_count));
+                                                    }
+                                                }
+                                            }
+                                        }
                                     } else {
-                                        return Err(format!("Bulk delete failed: Status {}", del_resp.status()));
+                                        return Err(format!(
+                                            "Toplu silme basarisiz (Status {}). Mesajlari silme yetkiniz olmayabilir.",
+                                            del_resp.status()
+                                        ));
+                                    }
+                                }
+                                Err(e) => return Err(format!("Request failed: {}", e)),
+                            }
+                        } else if message_ids.len() == 1 {
+                            let msg_id = &message_ids[0];
+                            let delete_url = format!("{}/channels/{}/messages/{}", base_url, channel_id, msg_id);
+                            match client
+                                .delete(&delete_url)
+                                .header("Authorization", &auth_token)
+                                .send()
+                                .await
+                            {
+                                Ok(del_resp) => {
+                                    if del_resp.status().is_success() || del_resp.status().as_u16() == 204 {
+                                        deleted = 1;
+                                        emit_log("[✓] Purged 1 message".to_string());
+                                    } else {
+                                        return Err(format!(
+                                            "Mesaj silme basarisiz (Status {}). Mesajlari silme yetkiniz olmayabilir.",
+                                            del_resp.status()
+                                        ));
                                     }
                                 }
                                 Err(e) => return Err(format!("Request failed: {}", e)),
@@ -3279,7 +3364,7 @@ pub async fn purge_channel(
         Err(e) => return Err(format!("Failed to fetch messages: {}", e)),
     }
 
-    Ok(format!("Successfully purged {} messages", deleted))
+    Ok(format!("Silinen mesaj sayısı: {}", deleted))
 }
 
 #[tauri::command]
@@ -3484,49 +3569,10 @@ pub async fn grab_avatar(user_token: String, user_id: String, size: u32) -> Resu
     if size > 4096 {
         return Err("Avatar boyutu çok büyük (max 4096)".to_string());
     }
-    
+
+    let (auth_token, me_id) = resolve_discord_auth(&client, base_url, &user_token).await?;
     let target_user_id = if user_id.trim().is_empty() || user_id.trim().to_lowercase() == "@me" {
-        let me_url = format!("{}/users/@me", base_url);
-        let me_resp = client
-            .get(&me_url)
-            .header("Authorization", &user_token)
-            .header("Content-Type", "application/json")
-            .send()
-            .await
-            .map_err(|e| {
-                if e.is_timeout() {
-                    "Discord API yanıt vermiyor (timeout). Lütfen tekrar deneyin.".to_string()
-                } else if e.is_connect() {
-                    "Discord API'ye bağlanılamıyor. İnternet bağlantınızı kontrol edin.".to_string()
-                } else {
-                    format!("İstek başarısız: {}", e)
-                }
-            })?;
-        
-        if me_resp.status().is_success() {
-            let me_data: Value = me_resp.json().await
-                .map_err(|e| format!("Yanıt parse edilemedi: {}", e))?;
-            let id = me_data["id"].as_str().unwrap_or("");
-            if id.is_empty() {
-                return Err("Token'dan kullanıcı ID'si alınamadı. Token geçersiz olabilir.".to_string());
-            }
-            id.to_string()
-        } else {
-            let status = me_resp.status();
-            let error_text = me_resp.text().await.unwrap_or_else(|_| "Bilinmeyen hata".to_string());
-            
-            if status == 401 || status == 403 {
-                if let Ok(error_json) = serde_json::from_str::<serde_json::Value>(&error_text) {
-                    let message = error_json["message"].as_str().unwrap_or("Yetkilendirme hatası");
-                    if message.contains("Unauthorized") || message.contains("Yetkilendirilmemiş") || message.contains("Invalid") {
-                        return Err("Token geçersiz veya süresi dolmuş. Lütfen geçerli bir token girin.".to_string());
-                    }
-                }
-                return Err("Token geçersiz veya süresi dolmuş. Lütfen geçerli bir token girin.".to_string());
-            } else {
-                return Err(format!("Kullanıcı bilgisi alınamadı (Status {}): {}", status, error_text));
-            }
-        }
+        me_id.ok_or("Token'dan kullanıcı ID'si alınamadı. Token geçersiz olabilir.".to_string())?
     } else {
         validate_discord_id(&user_id)?
     };
@@ -3539,7 +3585,7 @@ pub async fn grab_avatar(user_token: String, user_id: String, size: u32) -> Resu
 
     match client
         .get(&url)
-        .header("Authorization", &user_token)
+        .header("Authorization", &auth_token)
         .header("Content-Type", "application/json")
         .send()
         .await
@@ -3700,12 +3746,6 @@ pub async fn stop_webhook_spam() -> Result<String, String> {
 }
 
 #[tauri::command]
-pub async fn cancel_member_scraper() -> Result<String, String> {
-    MEMBER_SCRAPER_CANCELLED.store(true, Ordering::SeqCst);
-    Ok("Member scraper cancellation requested".to_string())
-}
-
-#[tauri::command]
 pub async fn delete_webhook(webhook_url: String) -> Result<String, String> {
     let client = reqwest::Client::new();
 
@@ -3723,233 +3763,6 @@ pub async fn delete_webhook(webhook_url: String) -> Result<String, String> {
         }
         Err(e) => Err(format!("Request failed: {}", e)),
     }
-}
-
-#[tauri::command]
-pub async fn scrape_guild_members(
-    app: tauri::AppHandle,
-    user_token: String,
-    guild_id: String,
-    options: String,
-) -> Result<String, String> {
-    check_auth()?;
-    
-    let user_token = validate_discord_token(&user_token)?;
-    let guild_id = validate_discord_id(&guild_id)?;
-    
-    use serde_json::Value;
-    use std::fs::File;
-    use std::io::Write;
-
-    let client = reqwest::Client::new();
-    let base_url = "https://discord.com/api/v10";
-
-    let emit_log = |msg: String| {
-        let _ = app.emit("member-scraper-log", msg);
-    };
-
-    MEMBER_SCRAPER_CANCELLED.store(false, Ordering::SeqCst);
-
-    emit_log("[INFO] Starting member scraping...".to_string());
-    emit_log("[WARNING] This may violate Discord Terms of Service!".to_string());
-
-    let opts: Value = serde_json::from_str(&options)
-        .unwrap_or_else(|_| serde_json::json!({
-            "includeRoles": true,
-            "includeBots": false,
-            "includeStatus": false,
-            "exportFormat": "json"
-        }));
-
-    let include_roles = opts["includeRoles"].as_bool().unwrap_or(true);
-    let include_bots = opts["includeBots"].as_bool().unwrap_or(false);
-    let export_format = opts["exportFormat"].as_str().unwrap_or("json");
-
-    emit_log(format!("[+] Fetching members from guild {}...", guild_id));
-
-    let mut all_members = Vec::new();
-    let mut after = "0".to_string();
-    let limit = 1000;
-
-    loop {
-        if MEMBER_SCRAPER_CANCELLED.load(Ordering::SeqCst) {
-            emit_log("[WARNING] Member scraping cancelled by user".to_string());
-            return Err("Member scraping cancelled".to_string());
-        }
-        let url = format!(
-            "{}/guilds/{}/members?limit={}&after={}",
-            base_url, guild_id, limit, after
-        );
-
-        match client
-            .get(&url)
-            .header("Authorization", &user_token)
-            .send()
-            .await
-        {
-            Ok(resp) => {
-                if resp.status().is_success() {
-                    match resp.json::<Value>().await {
-                        Ok(members) => {
-                            if let Some(members_array) = members.as_array() {
-                                if members_array.is_empty() {
-                                    break;
-                                }
-
-                                emit_log(format!("[+] Fetched {} members", members_array.len()));
-
-                                for member in members_array {
-                                    if !include_bots {
-                                        if let Some(user) = member.get("user") {
-                                            if user.get("bot").and_then(|v| v.as_bool()).unwrap_or(false) {
-                                                continue;
-                                            }
-                                        }
-                                    }
-
-                                    all_members.push(member.clone());
-                                }
-
-                                if let Some(last_member) = members_array.last() {
-                                    if let Some(user) = last_member.get("user") {
-                                        if let Some(id) = user.get("id").and_then(|v| v.as_str()) {
-                                            after = id.to_string();
-                                        }
-                                    }
-                                }
-
-                                if members_array.len() < limit as usize {
-                                    break;
-                                }
-                            }
-                        }
-                        Err(e) => {
-                            emit_log(format!("[ERROR] Failed to parse response: {}", e));
-                            break;
-                        }
-                    }
-                } else if resp.status().as_u16() == 429 {
-                    emit_log("[WARNING] Rate limited! Waiting 5 seconds...".to_string());
-                    tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
-                    continue;
-                } else {
-                    let status = resp.status();
-                    let error_text = resp.text().await.unwrap_or_else(|_| "Bilinmeyen hata".to_string());
-                    
-                    let error_msg = if status == 403 {
-                        if let Ok(error_json) = serde_json::from_str::<serde_json::Value>(&error_text) {
-                            let message = error_json["message"].as_str().unwrap_or("Yetkilendirme hatası");
-                            let code = error_json["code"].as_u64().unwrap_or(0);
-                            
-                            if message.contains("Missing Access") 
-                                || message.contains("Missing Permissions")
-                                || message.contains("Erişim Bulunmuyor")
-                                || message.contains("Yetkilendirilmemiş")
-                                || code == 50001
-                                || code == 50013 {
-                                emit_log("[ERROR] Bu sunucuda üye listesini görüntüleme yetkiniz yok.".to_string());
-                                emit_log("[INFO] Not: Bu özellik genellikle bot token'ı ve SERVER MEMBERS INTENT gerektirir.".to_string());
-                                "Bu sunucuda üye listesini görüntüleme yetkiniz yok. Bu özellik genellikle bot token'ı ve SERVER MEMBERS INTENT gerektirir. Lütfen bot token'ı kullanın ve Discord Developer Portal'da SERVER MEMBERS INTENT'i etkinleştirin.".to_string()
-                            } else {
-                                format!("Discord API hatası: {} (Code: {})", message, code)
-                            }
-                        } else {
-                            emit_log("[ERROR] Bu sunucuda üye listesini görüntüleme yetkiniz yok.".to_string());
-                            emit_log("[INFO] Not: Bu özellik genellikle bot token'ı ve SERVER MEMBERS INTENT gerektirir.".to_string());
-                            "Bu sunucuda üye listesini görüntüleme yetkiniz yok. Bu özellik genellikle bot token'ı ve SERVER MEMBERS INTENT gerektirir. Lütfen bot token'ı kullanın ve Discord Developer Portal'da SERVER MEMBERS INTENT'i etkinleştirin.".to_string()
-                        }
-                    } else if status == 401 {
-                        emit_log("[ERROR] Token geçersiz veya süresi dolmuş".to_string());
-                        "Token geçersiz veya süresi dolmuş. Lütfen geçerli bir token girin.".to_string()
-                    } else if status == 404 {
-                        emit_log("[ERROR] Sunucu bulunamadı".to_string());
-                        "Sunucu bulunamadı. Guild ID'sini kontrol edin.".to_string()
-                    } else {
-                        emit_log(format!("[ERROR] Discord API hatası (Status {}): {}", status, error_text));
-                        format!("Discord API hatası (Status {}): {}", status, error_text)
-                    };
-                    
-                    return Err(error_msg);
-                }
-            }
-            Err(e) => return Err(format!("Request failed: {}", e)),
-        }
-
-        tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
-    }
-
-    emit_log(format!("[✓] Total members scraped: {}", all_members.len()));
-
-    let timestamp = chrono::Local::now().format("%Y%m%d_%H%M%S");
-    let filename = format!("guild_{}_members_{}.{}", guild_id, timestamp, export_format);
-
-    match export_format {
-        "json" => {
-            let json_data = serde_json::to_string_pretty(&all_members)
-                .map_err(|e| format!("Failed to serialize JSON: {}", e))?;
-            
-            let mut file = File::create(&filename)
-                .map_err(|e| format!("Failed to create file: {}", e))?;
-            file.write_all(json_data.as_bytes())
-                .map_err(|e| format!("Failed to write file: {}", e))?;
-        }
-        "csv" => {
-            let mut csv_content = String::from("ID,Username,Discriminator,Nickname,Joined At");
-            if include_roles {
-                csv_content.push_str(",Roles");
-            }
-            csv_content.push('\n');
-
-            for member in &all_members {
-                if let Some(user) = member.get("user") {
-                    let id = user.get("id").and_then(|v| v.as_str()).unwrap_or("N/A");
-                    let username = user.get("username").and_then(|v| v.as_str()).unwrap_or("N/A");
-                    let discriminator = user.get("discriminator").and_then(|v| v.as_str()).unwrap_or("0");
-                    let nick = member.get("nick").and_then(|v| v.as_str()).unwrap_or("");
-                    let joined_at = member.get("joined_at").and_then(|v| v.as_str()).unwrap_or("N/A");
-
-                    csv_content.push_str(&format!("{},{},{},{},{}", id, username, discriminator, nick, joined_at));
-
-                    if include_roles {
-                        if let Some(roles) = member.get("roles").and_then(|v| v.as_array()) {
-                            let role_ids: Vec<String> = roles.iter()
-                                .filter_map(|r| r.as_str().map(String::from))
-                                .collect();
-                            csv_content.push_str(&format!(",\"{}\"", role_ids.join("; ")));
-                        } else {
-                            csv_content.push_str(",");
-                        }
-                    }
-                    csv_content.push('\n');
-                }
-            }
-
-            let mut file = File::create(&filename)
-                .map_err(|e| format!("Failed to create file: {}", e))?;
-            file.write_all(csv_content.as_bytes())
-                .map_err(|e| format!("Failed to write file: {}", e))?;
-        }
-        "txt" => {
-            let mut txt_content = String::new();
-            for member in &all_members {
-                if let Some(user) = member.get("user") {
-                    let username = user.get("username").and_then(|v| v.as_str()).unwrap_or("N/A");
-                    let id = user.get("id").and_then(|v| v.as_str()).unwrap_or("N/A");
-                    txt_content.push_str(&format!("{}#{} (ID: {})\n", username, 
-                        user.get("discriminator").and_then(|v| v.as_str()).unwrap_or("0"), id));
-                }
-            }
-
-            let mut file = File::create(&filename)
-                .map_err(|e| format!("Failed to create file: {}", e))?;
-            file.write_all(txt_content.as_bytes())
-                .map_err(|e| format!("Failed to write file: {}", e))?;
-        }
-        _ => return Err("Unsupported export format".to_string()),
-    }
-
-    emit_log(format!("[✓] Members exported to: {}", filename));
-    Ok(format!("Successfully scraped {} members and saved to {}", all_members.len(), filename))
 }
 
 #[tauri::command]
