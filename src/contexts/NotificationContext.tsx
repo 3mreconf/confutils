@@ -8,11 +8,20 @@ interface Notification {
   type: NotificationType;
   title: string;
   message: string;
+  action?: {
+    label: string;
+    onClick: () => void;
+  };
 }
 
 interface NotificationContextType {
   notifications: Notification[];
-  showNotification: (type: NotificationType, title: string, message: string) => void;
+  showNotification: (
+    type: NotificationType,
+    title: string,
+    message: string,
+    action?: { label: string; onClick: () => void }
+  ) => void;
   removeNotification: (id: string) => void;
 }
 
@@ -21,9 +30,14 @@ const NotificationContext = createContext<NotificationContextType | undefined>(u
 export const NotificationProvider = ({ children }: { children: ReactNode }) => {
   const [notifications, setNotifications] = useState<Notification[]>([]);
 
-  const showNotification = (type: NotificationType, title: string, message: string) => {
+  const showNotification = (
+    type: NotificationType,
+    title: string,
+    message: string,
+    action?: { label: string; onClick: () => void }
+  ) => {
     const id = `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    const newNotification: Notification = { id, type, title, message };
+    const newNotification: Notification = { id, type, title, message, action };
     
     setNotifications(prev => [...prev, newNotification]);
     

@@ -15,6 +15,7 @@ export const ToastContainer = () => {
           type={notification.type}
           title={notification.title}
           message={notification.message}
+          action={notification.action}
           onClose={() => removeNotification(notification.id)}
         />
       ))}
@@ -28,10 +29,11 @@ interface ToastProps {
   type: 'success' | 'error' | 'warning' | 'info';
   title: string;
   message: string;
+  action?: { label: string; onClick: () => void };
   onClose: () => void;
 }
 
-const Toast = ({ type, title, message, onClose }: ToastProps) => {
+const Toast = ({ type, title, message, action, onClose }: ToastProps) => {
   const icons = {
     success: CheckCircle,
     error: XCircle,
@@ -41,6 +43,13 @@ const Toast = ({ type, title, message, onClose }: ToastProps) => {
 
   const Icon = icons[type];
 
+  const handleActionClick = () => {
+    if (action) {
+      action.onClick();
+      onClose();
+    }
+  };
+
   return (
     <div className={`toast toast-${type}`}>
       <div className="toast-icon">
@@ -49,8 +58,25 @@ const Toast = ({ type, title, message, onClose }: ToastProps) => {
       <div className="toast-content">
         <div className="toast-title">{title}</div>
         <div className="toast-message">{message}</div>
+        {action && (
+          <div className="toast-actions">
+            <button
+              className="toast-action"
+              type="button"
+              onClick={handleActionClick}
+            >
+              {action.label}
+            </button>
+          </div>
+        )}
       </div>
-      <button className="toast-close" onClick={onClose}>
+      <button
+        className="toast-close"
+        onClick={(event) => {
+          event.stopPropagation();
+          onClose();
+        }}
+      >
         <X size={16} />
       </button>
     </div>

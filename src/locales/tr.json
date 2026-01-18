@@ -892,6 +892,7 @@
   "notification_app_installed_message": "{{app}} yüklendi",
   "notification_startup_added_title": "Başlangıca eklendi",
   "notification_startup_added_message": "{{app}} başlangıca eklendi",
+  "notification_startup_added_action": "Başlangıç listesini aç",
   "notification_setting_updated_title": "Ayar Güncellendi",
   "notification_minimize_to_tray_enabled_message": "Simge durumuna küçültme etkinleştirildi",
   "notification_minimize_to_tray_disabled_message": "Simge durumuna küçültme devre dışı bırakıldı",

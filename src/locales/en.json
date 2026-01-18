@@ -892,6 +892,7 @@
   "notification_app_installed_message": "{{app}} was installed",
   "notification_startup_added_title": "Startup entry added",
   "notification_startup_added_message": "{{app}} added to startup",
+  "notification_startup_added_action": "Open startup list",
   "notification_setting_updated_title": "Setting Updated",
   "notification_minimize_to_tray_enabled_message": "Minimize to tray enabled",
   "notification_minimize_to_tray_disabled_message": "Minimize to tray disabled",

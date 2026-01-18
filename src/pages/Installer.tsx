@@ -28,6 +28,7 @@ import {
 } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useNotification } from '../contexts/NotificationContext';
+import { consumeInstallerSection } from '../utils/navigation';
 import {
   installWingetPackage,
   getInstalledApps,
@@ -377,6 +378,7 @@ const Installer: React.FC = () => {
   const [appUsage, setAppUsage] = useState<AppUsage[]>([]);
   const [appUsageLoading, setAppUsageLoading] = useState(false);
   const fetchingRef = useRef(false);
+  const installerTargetRef = useRef<string | null>(null);
 
   const toggleApp = (id: string) => {
     if (selectedApps.includes(id)) {
@@ -441,6 +443,28 @@ const Installer: React.FC = () => {
       fetchInstalledApps();
     }
   }, [activeTab, fetchInstalledApps]);
+
+  useEffect(() => {
+    const target = consumeInstallerSection();
+    if (target) {
+      installerTargetRef.current = target;
+      setActiveTab('utilities');
+    }
+  }, []);
+
+  useEffect(() => {
+    if (activeTab !== 'utilities' || !installerTargetRef.current) {
+      return;
+    }
+    const target = installerTargetRef.current;
+    installerTargetRef.current = null;
+    setTimeout(() => {
+      const element = document.getElementById(target);
+      if (element) {
+        element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }, 0);
+  }, [activeTab]);
 
   useEffect(() => {
     const savedHistory = localStorage.getItem('confutils_install_history');
@@ -1226,7 +1250,7 @@ const Installer: React.FC = () => {
                 </div>
               </div>
 
-              <div className="utility-card">
+              <div className="utility-card" id="startup-programs">
                 <div className="utility-card-header">
                   <div className="utility-card-title">
                     <Monitor size={18} />

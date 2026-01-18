@@ -130,6 +130,27 @@
   word-break: break-word;
 }
 
+.toast-actions {
+  margin-top: 8px;
+  display: flex;
+  gap: 8px;
+}
+
+.toast-action {
+  background: var(--bg-secondary);
+  border: 1px solid var(--glass-border);
+  color: var(--text-primary);
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.toast-action:hover {
+  background: var(--bg-tertiary);
+}
+
 .toast-close {
   flex-shrink: 0;
   background: transparent;

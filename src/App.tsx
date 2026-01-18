@@ -8,6 +8,7 @@ import { useLanguage } from './contexts/LanguageContext';
 import { useNotification } from './contexts/NotificationContext';
 import { useAntiDebug } from './hooks/useAntiDebug';
 import { clearTempFiles, getInstalledApps, listStartupPrograms } from './utils/tauri';
+import { navigateToInstallerSection } from './utils/navigation';
 import './styles/globals.css';
 import './styles/theme.css';
 import './App.css';
@@ -186,7 +187,11 @@ function App() {
               showNotification(
                 'info',
                 t('notification_startup_added_title'),
-                t('notification_startup_added_message', { app: name })
+                t('notification_startup_added_message', { app: name }),
+                {
+                  label: t('notification_startup_added_action'),
+                  onClick: () => navigateToInstallerSection('startup-programs')
+                }
               );
             });
           }
