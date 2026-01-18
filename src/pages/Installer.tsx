@@ -47,7 +47,9 @@ import {
   runPrivacyAudit,
   disableStorageSense,
   scanHiddenServices,
+  scanOpenPorts,
   analyzeJunkOrigins,
+  scanRegistryHealth,
   applyPowerAudioOptimizations,
   revertPowerAudioOptimizations,
   monitorAppUsage
@@ -291,10 +293,38 @@ interface HiddenService {
   State?: string;
 }
 
+interface OpenPortEntry {
+  LocalAddress?: string;
+  LocalPort?: number;
+  OwningProcess?: number;
+  ProcessName?: string;
+  Protocol?: string;
+  Recommendation?: string;
+}
+
 interface JunkOrigin {
   Name?: string;
   Path?: string;
   SizeMB?: number;
+}
+
+interface RegistryHealthIssue {
+  id: string;
+  type: string;
+  path: string;
+  detail: string;
+  recommendation?: string;
+}
+
+interface RegistryHealthSummary {
+  total: number;
+  missingPaths: number;
+  invalidUninstall: number;
+}
+
+interface RegistryHealthResult {
+  summary: RegistryHealthSummary;
+  issues: RegistryHealthIssue[];
 }
 
 interface AppUsage {
@@ -337,8 +367,12 @@ const Installer: React.FC = () => {
   const [privacyAuditLoading, setPrivacyAuditLoading] = useState(false);
   const [hiddenServices, setHiddenServices] = useState<HiddenService[]>([]);
   const [hiddenServicesLoading, setHiddenServicesLoading] = useState(false);
+  const [openPorts, setOpenPorts] = useState<OpenPortEntry[]>([]);
+  const [openPortsLoading, setOpenPortsLoading] = useState(false);
   const [junkOrigins, setJunkOrigins] = useState<JunkOrigin[]>([]);
   const [junkOriginsLoading, setJunkOriginsLoading] = useState(false);
+  const [registryHealth, setRegistryHealth] = useState<RegistryHealthResult | null>(null);
+  const [registryHealthLoading, setRegistryHealthLoading] = useState(false);
   const [powerAudioLoading, setPowerAudioLoading] = useState(false);
   const [appUsage, setAppUsage] = useState<AppUsage[]>([]);
   const [appUsageLoading, setAppUsageLoading] = useState(false);
@@ -641,6 +675,22 @@ const Installer: React.FC = () => {
     }
   };
 
+  const handleScanOpenPorts = async () => {
+    setOpenPortsLoading(true);
+    setOpenPorts([]);
+    try {
+      const result = await scanOpenPorts();
+      const parsed = JSON.parse(result || '[]');
+      if (Array.isArray(parsed)) {
+        setOpenPorts(parsed as OpenPortEntry[]);
+      }
+    } catch (error) {
+      showNotification('error', t('error'), `${error}`);
+    } finally {
+      setOpenPortsLoading(false);
+    }
+  };
+
   const handleAnalyzeJunkOrigins = async () => {
     setJunkOriginsLoading(true);
     setJunkOrigins([]);
@@ -654,6 +704,29 @@ const Installer: React.FC = () => {
       showNotification('error', t('error'), `${error}`);
     } finally {
       setJunkOriginsLoading(false);
+    }
+  };
+
+  const handleScanRegistryHealth = async () => {
+    setRegistryHealthLoading(true);
+    setRegistryHealth(null);
+    try {
+      const result = await scanRegistryHealth();
+      const parsed = JSON.parse(result || '{}');
+      if (parsed && typeof parsed === 'object') {
+        setRegistryHealth({
+          summary: {
+            total: parsed.summary?.total || 0,
+            missingPaths: parsed.summary?.missingPaths || 0,
+            invalidUninstall: parsed.summary?.invalidUninstall || 0
+          },
+          issues: Array.isArray(parsed.issues) ? parsed.issues : []
+        });
+      }
+    } catch (error) {
+      showNotification('error', t('error'), `${error}`);
+    } finally {
+      setRegistryHealthLoading(false);
     }
   };
 
@@ -1392,6 +1465,47 @@ const Installer: React.FC = () => {
               <div className="utility-card">
                 <div className="utility-card-header">
                   <div className="utility-card-title">
+                    <ShieldCheck size={18} />
+                    {t('utility_open_ports_title')}
+                  </div>
+                  <div className="utility-card-description">{t('utility_open_ports_description')}</div>
+                </div>
+                <div className="utility-card-body">
+                  <button
+                    className="utility-btn"
+                    onClick={handleScanOpenPorts}
+                    disabled={openPortsLoading}
+                  >
+                    {openPortsLoading ? t('utility_scanning') : t('utility_open_ports_scan')}
+                  </button>
+                  {openPorts.length === 0 && !openPortsLoading ? (
+                    <div className="utility-empty">{t('utility_open_ports_empty')}</div>
+                  ) : (
+                    <div className="utility-list">
+                      {openPorts.map((entry) => (
+                        <div key={`${entry.LocalAddress}-${entry.LocalPort}-${entry.OwningProcess}`} className="utility-list-item">
+                          <div className="utility-list-info">
+                            <span className="utility-list-name">
+                              {entry.Protocol || 'TCP'} {entry.LocalAddress}:{entry.LocalPort}
+                            </span>
+                            <span className="utility-list-sub">
+                              {entry.ProcessName || t('utility_open_ports_unknown_process')}
+                            </span>
+                            {entry.Recommendation && (
+                              <span className="utility-list-sub">{entry.Recommendation}</span>
+                            )}
+                          </div>
+                          <span className="impact-badge medium">{entry.LocalPort}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="utility-card">
+                <div className="utility-card-header">
+                  <div className="utility-card-title">
                     <FolderSearch size={18} />
                     {t('utility_junk_origin_title')}
                   </div>
@@ -1418,6 +1532,59 @@ const Installer: React.FC = () => {
                           <span className="impact-badge medium">{item.SizeMB || 0} MB</span>
                         </div>
                       ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="utility-card">
+                <div className="utility-card-header">
+                  <div className="utility-card-title">
+                    <Search size={18} />
+                    {t('utility_registry_health_title')}
+                  </div>
+                  <div className="utility-card-description">{t('utility_registry_health_description')}</div>
+                </div>
+                <div className="utility-card-body">
+                  <button
+                    className="utility-btn"
+                    onClick={handleScanRegistryHealth}
+                    disabled={registryHealthLoading}
+                  >
+                    {registryHealthLoading ? t('utility_scanning') : t('utility_registry_health_scan')}
+                  </button>
+                  {registryHealth && (
+                    <div className="utility-result">
+                      <div className="utility-result-row">
+                        <span>{t('utility_registry_health_total')}</span>
+                        <span className="impact-badge medium">{registryHealth.summary.total}</span>
+                      </div>
+                      <div className="utility-result-row">
+                        <span>{t('utility_registry_health_missing_paths')}</span>
+                        <span className="impact-badge medium">{registryHealth.summary.missingPaths}</span>
+                      </div>
+                      <div className="utility-result-row">
+                        <span>{t('utility_registry_health_invalid_uninstall')}</span>
+                        <span className="impact-badge medium">{registryHealth.summary.invalidUninstall}</span>
+                      </div>
+                      {registryHealth.issues.length === 0 ? (
+                        <div className="utility-empty">{t('utility_registry_health_empty')}</div>
+                      ) : (
+                        <div className="utility-list">
+                          {registryHealth.issues.map((issue) => (
+                            <div key={issue.id} className="utility-list-item">
+                              <div className="utility-list-info">
+                                <span className="utility-list-name">{issue.path}</span>
+                                <span className="utility-list-sub">{issue.detail}</span>
+                                {issue.recommendation && (
+                                  <span className="utility-list-sub">{issue.recommendation}</span>
+                                )}
+                              </div>
+                              <span className="impact-badge low">{issue.type}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>

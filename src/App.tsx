@@ -1,12 +1,13 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Sidebar } from './components/Layout/Sidebar';
 import { Header } from './components/Layout/Header';
 import { MainContent } from './components/Layout/MainContent';
 import { ToastContainer } from './components/UI/Toast';
 import { ModalManager } from './components/UI/ModalManager';
 import { useLanguage } from './contexts/LanguageContext';
+import { useNotification } from './contexts/NotificationContext';
 import { useAntiDebug } from './hooks/useAntiDebug';
-import { clearTempFiles } from './utils/tauri';
+import { clearTempFiles, getInstalledApps, listStartupPrograms } from './utils/tauri';
 import './styles/globals.css';
 import './styles/theme.css';
 import './App.css';
@@ -29,6 +30,9 @@ import About from './pages/About';
 function App() {
   const [activePage, setActivePage] = useState('dashboard');
   const { t } = useLanguage();
+  const { showNotification } = useNotification();
+  const installedSnapshot = useRef<Set<string> | null>(null);
+  const startupSnapshot = useRef<Set<string> | null>(null);
 
   useAntiDebug({
     enableBackendCheck: false,
@@ -78,15 +82,129 @@ function App() {
       const settings = localStorage.getItem('confutils_settings');
       if (settings) {
         const parsedSettings = JSON.parse(settings);
-        const fontScale = parsedSettings.fontScale || 'md';
         const contrast = parsedSettings.contrast || 'default';
-        document.body.dataset.fontScale = fontScale;
         document.body.dataset.contrast = contrast;
       }
     } catch (error) {
       console.error('Failed to apply UI preferences:', error);
     }
   }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const notificationsEnabled = () => {
+      try {
+        const settings = localStorage.getItem('confutils_settings');
+        if (settings) {
+          const parsed = JSON.parse(settings);
+          if (parsed && parsed.notifications === false) {
+            return false;
+          }
+        }
+      } catch {
+        return true;
+      }
+      return true;
+    };
+
+    const parseInstalledApps = (raw: string): string[] => {
+      if (!raw || raw.trim() === '' || raw.trim() === '[]') {
+        return [];
+      }
+      try {
+        const jsonResult = JSON.parse(raw);
+        if (Array.isArray(jsonResult)) {
+          return jsonResult
+            .map((app: { Id?: string; Name?: string }) => app.Id || app.Name)
+            .filter((value: string | undefined): value is string => Boolean(value));
+        }
+        if (jsonResult && typeof jsonResult === 'object' && Array.isArray(jsonResult.Apps)) {
+          return jsonResult.Apps
+            .map((app: { Id?: string; Name?: string }) => app.Id || app.Name)
+            .filter((value: string | undefined): value is string => Boolean(value));
+        }
+        return [];
+      } catch {
+        return [];
+      }
+    };
+
+    const parseStartupPrograms = (raw: string): string[] => {
+      if (!raw || raw.trim() === '' || raw.trim() === '[]') {
+        return [];
+      }
+      try {
+        const jsonResult = JSON.parse(raw);
+        if (Array.isArray(jsonResult)) {
+          return jsonResult
+            .map((item: { Name?: string; Command?: string }) => item.Name || item.Command)
+            .filter((value: string | undefined): value is string => Boolean(value));
+        }
+        return [];
+      } catch {
+        return [];
+      }
+    };
+
+    const pollSystemChanges = async () => {
+      if (!notificationsEnabled()) {
+        return;
+      }
+
+      try {
+        const installedRaw = await getInstalledApps();
+        const installedList = parseInstalledApps(installedRaw);
+        const installedSet = new Set(installedList);
+
+        if (installedSnapshot.current) {
+          const added = installedList.filter((id) => !installedSnapshot.current?.has(id));
+          if (added.length > 0 && isMounted) {
+            added.slice(0, 3).forEach((appId) => {
+              showNotification(
+                'info',
+                t('notification_app_installed_title'),
+                t('notification_app_installed_message', { app: appId })
+              );
+            });
+          }
+        }
+        installedSnapshot.current = installedSet;
+      } catch {
+        return;
+      }
+
+      try {
+        const startupRaw = await listStartupPrograms();
+        const startupList = parseStartupPrograms(startupRaw);
+        const startupSet = new Set(startupList);
+
+        if (startupSnapshot.current) {
+          const added = startupList.filter((name) => !startupSnapshot.current?.has(name));
+          if (added.length > 0 && isMounted) {
+            added.slice(0, 3).forEach((name) => {
+              showNotification(
+                'info',
+                t('notification_startup_added_title'),
+                t('notification_startup_added_message', { app: name })
+              );
+            });
+          }
+        }
+        startupSnapshot.current = startupSet;
+      } catch {
+        return;
+      }
+    };
+
+    const intervalId = setInterval(pollSystemChanges, 180000);
+    pollSystemChanges();
+
+    return () => {
+      isMounted = false;
+      clearInterval(intervalId);
+    };
+  }, [showNotification, t]);
 
   useEffect(() => {
     const handler = (event: Event) => {

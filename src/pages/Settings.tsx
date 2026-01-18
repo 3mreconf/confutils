@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { UtilityCard } from '../components/Cards/UtilityCard';
-import { Bell, Zap, Download, RotateCw, Globe, Type, SlidersHorizontal, Upload, Save } from 'lucide-react';
+import { Bell, Zap, RotateCw, Globe, SlidersHorizontal, Upload, Save } from 'lucide-react';
 import { useNotification } from '../contexts/NotificationContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { open } from '@tauri-apps/plugin-shell';
@@ -20,7 +20,6 @@ interface AppSettings {
   minimizeToTray: boolean;
   autoCleanup: boolean;
   autoCheckToken?: boolean;
-  fontScale?: 'sm' | 'md' | 'lg';
   contrast?: 'soft' | 'default' | 'high';
 }
 
@@ -52,7 +51,6 @@ const Settings = () => {
   const [minimizeToTray, setMinimizeToTray] = useState(false);
   const [autoCleanup, setAutoCleanup] = useState(false);
   const [autoCheckTokenOnSave, setAutoCheckTokenOnSave] = useState(false);
-  const [fontScale, setFontScale] = useState<'sm' | 'md' | 'lg'>('md');
   const [contrast, setContrast] = useState<'soft' | 'default' | 'high'>('default');
   const [tokenInput, setTokenInput] = useState('');
   const [tokenLabelInput, setTokenLabelInput] = useState('');
@@ -92,10 +90,6 @@ const Settings = () => {
   }, []);
 
   useEffect(() => {
-    fetchLatestRelease(false);
-  }, []);
-
-  useEffect(() => {
     if (discordUserToken) {
       setTokenInput(discordUserToken);
       setTokenLabelInput(discordTokenLabels[discordUserToken] || '');
@@ -108,9 +102,12 @@ const Settings = () => {
   }, [discordUserTokens.length]);
 
   useEffect(() => {
-    document.body.dataset.fontScale = fontScale;
     document.body.dataset.contrast = contrast;
-  }, [fontScale, contrast]);
+  }, [contrast]);
+
+  useEffect(() => {
+    fetchLatestRelease();
+  }, []);
 
   useEffect(() => {
     const target = consumeSettingsSection();
@@ -135,7 +132,6 @@ const Settings = () => {
         setMinimizeToTray(settings.minimizeToTray);
         setAutoCleanup(settings.autoCleanup || false);
         setAutoCheckTokenOnSave(settings.autoCheckToken || false);
-        setFontScale(settings.fontScale || 'md');
         setContrast(settings.contrast || 'default');
         if (settings.language && settings.language !== language) {
           setLanguage(settings.language);
@@ -154,7 +150,6 @@ const Settings = () => {
         minimizeToTray,
         autoCleanup,
         autoCheckToken: autoCheckTokenOnSave,
-        fontScale,
         contrast,
         language,
         ...newSettings,
@@ -238,12 +233,9 @@ const Settings = () => {
     return windowsAsset ? windowsAsset.browser_download_url : null;
   };
 
-  const fetchLatestRelease = async (notify: boolean) => {
+  const fetchLatestRelease = async () => {
     setUpdateStatus('checking');
     setUpdateError(null);
-    if (notify) {
-      showNotification('info', t('notification_checking_for_updates_title'), t('notification_checking_for_updates_message'));
-    }
     try {
       const response = await fetch('https://api.github.com/repos/3mreconf/confutils/releases/latest', {
         headers: {
@@ -271,14 +263,8 @@ const Settings = () => {
       if (currentVersion) {
         if (compareVersions(version, currentVersion) > 0) {
           setUpdateStatus('available');
-          if (notify) {
-            showNotification('success', t('notification_update_found_title'), t('notification_update_found_message', { version }));
-          }
         } else {
           setUpdateStatus('upToDate');
-          if (notify) {
-            showNotification('success', t('notification_update_up_to_date_title'), t('notification_update_up_to_date_message'));
-          }
         }
       } else {
         setUpdateStatus('idle');
@@ -287,26 +273,8 @@ const Settings = () => {
       const message = error instanceof Error ? error.message : String(error);
       setUpdateStatus('error');
       setUpdateError(message);
-      if (notify) {
-        showNotification('error', t('notification_update_check_failed_title'), t('notification_update_check_failed_message', { error: message }));
-      }
     }
   };
-
-  const handleCheckUpdates = async () => {
-    await fetchLatestRelease(true);
-  };
-
-  useEffect(() => {
-    if (!latestRelease || !currentVersion) {
-      return;
-    }
-    if (compareVersions(latestRelease.version, currentVersion) > 0) {
-      setUpdateStatus('available');
-    } else {
-      setUpdateStatus('upToDate');
-    }
-  }, [latestRelease, currentVersion]);
 
   const handleSaveToken = () => {
     const trimmed = tokenInput.trim();
@@ -450,12 +418,11 @@ const Settings = () => {
     setMinimizeToTray(DEFAULT_SETTINGS.minimizeToTray);
     setAutoCleanup(DEFAULT_SETTINGS.autoCleanup);
     setAutoCheckTokenOnSave(false);
-    setFontScale('md');
     setContrast('default');
     setLanguage('tr');
     localStorage.setItem(
       SETTINGS_KEY,
-      JSON.stringify({ ...DEFAULT_SETTINGS, language: 'tr', autoCheckToken: false, fontScale: 'md', contrast: 'default' })
+      JSON.stringify({ ...DEFAULT_SETTINGS, language: 'tr', autoCheckToken: false, contrast: 'default' })
     );
     showNotification('warning', t('notification_reset_settings_title'), t('notification_reset_settings_message'));
   };
@@ -463,11 +430,6 @@ const Settings = () => {
   const languageOptions = [
     { value: 'tr', label: t('language_turkish') },
     { value: 'en', label: t('language_english') },
-  ];
-  const fontScaleOptions = [
-    { value: 'sm', label: t('settings_font_size_small') },
-    { value: 'md', label: t('settings_font_size_medium') },
-    { value: 'lg', label: t('settings_font_size_large') },
   ];
   const contrastOptions = [
     { value: 'soft', label: t('settings_contrast_soft') },
@@ -620,22 +582,6 @@ const Settings = () => {
           </UtilityCard>
 
           <UtilityCard
-            icon={Type}
-            title={t('settings_font_size_title')}
-            description={t('settings_font_size_description')}
-            actionType="custom"
-          >
-            <CustomSelect
-              options={fontScaleOptions}
-              value={fontScale}
-              onChange={(value) => {
-                setFontScale(value as 'sm' | 'md' | 'lg');
-                saveSettings({ fontScale: value as 'sm' | 'md' | 'lg' });
-              }}
-            />
-          </UtilityCard>
-
-          <UtilityCard
             icon={SlidersHorizontal}
             title={t('settings_contrast_title')}
             description={t('settings_contrast_description')}
@@ -651,14 +597,6 @@ const Settings = () => {
             />
           </UtilityCard>
 
-          <UtilityCard
-            icon={Download}
-            title={t('settings_check_for_updates_title')}
-            description={t('settings_check_for_updates_description')}
-            actionType="button"
-            actionLabel={t('settings_check_for_updates_button')}
-            onAction={handleCheckUpdates}
-          />
           {latestRelease && (
             <div className="settings-update-panel">
               <div className="settings-update-header">

@@ -1230,6 +1230,112 @@ pub async fn scan_app_leftovers(app_name: String) -> Result<String, String> {
 }
 
 #[tauri::command]
+pub async fn scan_registry_health() -> Result<String, String> {
+    check_auth()?;
+
+    let command = r#"
+        $issues = @()
+        function Add-Issue {
+            param(
+                [string]$Type,
+                [string]$Path,
+                [string]$Detail,
+                [string]$Recommendation
+            )
+            $issues += [pscustomobject]@{
+                id = [guid]::NewGuid().ToString()
+                type = $Type
+                path = $Path
+                detail = $Detail
+                recommendation = $Recommendation
+            }
+        }
+
+        $runPaths = @(
+            "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run",
+            "HKLM:\Software\Microsoft\Windows\CurrentVersion\Run",
+            "HKLM:\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Run"
+        )
+
+        foreach ($runPath in $runPaths) {
+            if (Test-Path $runPath) {
+                $props = Get-ItemProperty -Path $runPath -ErrorAction SilentlyContinue
+                if ($props) {
+                    foreach ($prop in $props.PSObject.Properties) {
+                        if ($prop.Name -in "PSPath","PSParentPath","PSChildName","PSDrive","PSProvider") { continue }
+                        $value = [string]$prop.Value
+                        $entryPath = "$runPath\$($prop.Name)"
+                        if ([string]::IsNullOrWhiteSpace($value)) {
+                            Add-Issue "run_empty" $entryPath "Empty Run entry" "Remove the empty entry"
+                            continue
+                        }
+                        $exe = $value
+                        if ($exe -match '^[`"'''']([^`"'''']+)') {
+                            $exe = $Matches[1]
+                        } else {
+                            $exe = $value.Split(' ')[0]
+                        }
+                        if ($exe -and -not (Test-Path $exe)) {
+                            Add-Issue "run_missing" $entryPath ("Target not found: " + $exe) "Consider removing or fixing the path"
+                        }
+                    }
+                }
+            }
+        }
+
+        $uninstallRoots = @(
+            "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall",
+            "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall",
+            "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall"
+        )
+
+        foreach ($root in $uninstallRoots) {
+            if (Test-Path $root) {
+                $subKeys = Get-ChildItem -Path $root -ErrorAction SilentlyContinue
+                foreach ($key in $subKeys) {
+                    $props = Get-ItemProperty -Path $key.PSPath -ErrorAction SilentlyContinue
+                    $displayName = [string]$props.DisplayName
+                    if ([string]::IsNullOrWhiteSpace($displayName)) {
+                        Add-Issue "uninstall_missing_name" $key.PSPath "Missing DisplayName" "Consider removing orphaned entry"
+                        continue
+                    }
+                    $installLocation = [string]$props.InstallLocation
+                    if (-not [string]::IsNullOrWhiteSpace($installLocation) -and -not (Test-Path $installLocation)) {
+                        Add-Issue "uninstall_missing_path" $key.PSPath ("InstallLocation not found: " + $installLocation) "Consider cleaning leftover entry"
+                    }
+                    $displayIcon = [string]$props.DisplayIcon
+                    if (-not [string]::IsNullOrWhiteSpace($displayIcon)) {
+                        $iconPath = $displayIcon
+                        if ($iconPath -match '^[`"'''']([^`"'''']+)') {
+                            $iconPath = $Matches[1]
+                        } else {
+                            $iconPath = $displayIcon.Split(',')[0]
+                        }
+                        if ($iconPath -and -not (Test-Path $iconPath)) {
+                            Add-Issue "uninstall_missing_icon" $key.PSPath ("DisplayIcon not found: " + $iconPath) "Consider updating or removing the entry"
+                        }
+                    }
+                }
+            }
+        }
+
+        $missingPaths = ($issues | Where-Object { $_.type -match "missing" }).Count
+        $invalidUninstall = ($issues | Where-Object { $_.type -like "uninstall_*" }).Count
+
+        [pscustomobject]@{
+            summary = [pscustomobject]@{
+                total = $issues.Count
+                missingPaths = $missingPaths
+                invalidUninstall = $invalidUninstall
+            }
+            issues = $issues
+        } | ConvertTo-Json -Depth 4
+    "#;
+
+    run_powershell_no_rate_limit(command.to_string()).await
+}
+
+#[tauri::command]
 pub async fn apply_storage_sense_profile(profile: String) -> Result<String, String> {
     check_auth()?;
 
@@ -1312,6 +1418,59 @@ pub async fn scan_hidden_services() -> Result<String, String> {
             $_.PathName -notmatch "Windows\\System32" -and $_.PathName -notmatch "Microsoft" -and $_.PathName -notmatch "Windows\\WinSxS"
         } | Select-Object Name, DisplayName, PathName, StartMode, State
         $services | ConvertTo-Json -Depth 3
+    "#;
+
+    run_powershell_no_rate_limit(command.to_string()).await
+}
+
+#[tauri::command]
+pub async fn scan_open_ports() -> Result<String, String> {
+    check_auth()?;
+
+    let command = r#"
+        $recommendations = @{
+            21 = "FTP portu acik. Kullanilmiyorsa kapatmaniz onerilir."
+            22 = "SSH portu acik. Uzak erisim gerekmiyorsa kapatmaniz onerilir."
+            23 = "Telnet portu acik. Guvenli degildir, kapatmaniz onerilir."
+            80 = "HTTP portu acik. Web sunucu kullanmiyorsaniz kapatabilirsiniz."
+            135 = "RPC portu acik. Yerel ag disina acmayin."
+            139 = "NetBIOS portu acik. Dosya paylasimi yoksa kapatabilirsiniz."
+            443 = "HTTPS portu acik. Web sunucu kullanmiyorsaniz kapatabilirsiniz."
+            445 = "SMB portu acik. Dosya paylasimi yoksa kapatabilirsiniz."
+            3389 = "RDP portu acik. Uzak masaustu kullanmiyorsaniz kapatin."
+        }
+
+        $items = @()
+        $connections = Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue
+        foreach ($conn in $connections) {
+            $procName = ""
+            try {
+                $proc = Get-Process -Id $conn.OwningProcess -ErrorAction SilentlyContinue
+                if ($proc) { $procName = $proc.ProcessName }
+            } catch {
+                $procName = ""
+            }
+
+            $rec = $null
+            if ($recommendations.ContainsKey($conn.LocalPort)) {
+                $rec = $recommendations[$conn.LocalPort]
+            }
+
+            $items += [pscustomobject]@{
+                LocalAddress = $conn.LocalAddress
+                LocalPort = $conn.LocalPort
+                OwningProcess = $conn.OwningProcess
+                ProcessName = $procName
+                Protocol = "TCP"
+                Recommendation = $rec
+            }
+        }
+
+        if ($items.Count -gt 0) {
+            $items | Sort-Object LocalPort | ConvertTo-Json -Depth 3
+        } else {
+            "[]"
+        }
     "#;
 
     run_powershell_no_rate_limit(command.to_string()).await
@@ -2551,6 +2710,66 @@ pub async fn clone_discord_server(
     }
 
     let mut role_id_map: HashMap<String, String> = HashMap::new();
+    role_id_map.insert(source_server_id.clone(), target_server_id.clone());
+
+    fn build_permission_overwrites(
+        role_id_map: &HashMap<String, String>,
+        source_server_id: &str,
+        target_server_id: &str,
+        overwrites: &Value,
+        emit_log: &impl Fn(String),
+    ) -> Vec<Value> {
+        let mut mapped = Vec::new();
+        if let Some(list) = overwrites.as_array() {
+            for overwrite in list {
+                let overwrite_id = match overwrite["id"].as_str() {
+                    Some(id) => id,
+                    None => continue,
+                };
+                let overwrite_type = if let Some(value) = overwrite["type"].as_u64() {
+                    Some(value)
+                } else {
+                    overwrite["type"]
+                        .as_str()
+                        .and_then(|value| value.parse::<u64>().ok())
+                };
+                let allow = overwrite["allow"].as_str().unwrap_or("0");
+                let deny = overwrite["deny"].as_str().unwrap_or("0");
+
+                let overwrite_type = match overwrite_type {
+                    Some(value) => value,
+                    None => continue,
+                };
+
+                if overwrite_type == 0 {
+                    let mapped_id = if overwrite_id == source_server_id {
+                        Some(target_server_id)
+                    } else {
+                        role_id_map.get(overwrite_id).map(String::as_str)
+                    };
+
+                    if let Some(mapped_id) = mapped_id {
+                        mapped.push(serde_json::json!({
+                            "id": mapped_id,
+                            "type": 0,
+                            "allow": allow,
+                            "deny": deny
+                        }));
+                    } else {
+                        emit_log(format!("[WARNING] Missing role mapping for permission overwrite {}", overwrite_id));
+                    }
+                } else if overwrite_type == 1 {
+                    mapped.push(serde_json::json!({
+                        "id": overwrite_id,
+                        "type": 1,
+                        "allow": allow,
+                        "deny": deny
+                    }));
+                }
+            }
+        }
+        mapped
+    }
 
     if options.roles {
         emit_log("[+] Deleting existing roles in target server...".to_string());
@@ -2654,6 +2873,60 @@ pub async fn clone_discord_server(
         }
     }
 
+    if options.channel_permissions && role_id_map.len() == 1 {
+        emit_log("[INFO] Preparing role mapping for channel permission overwrites...".to_string());
+        let source_roles_url = format!("{}/guilds/{}/roles", base_url, source_server_id);
+        let target_roles_url = format!("{}/guilds/{}/roles", base_url, target_server_id);
+
+        let mut source_role_name_map: HashMap<String, String> = HashMap::new();
+        if let Ok(resp) = client.get(&source_roles_url).header("Authorization", &user_token).send().await {
+            if resp.status().is_success() {
+                if let Ok(roles) = resp.json::<Value>().await {
+                    if let Some(roles_array) = roles.as_array() {
+                        for role in roles_array {
+                            if let (Some(role_id), Some(role_name)) = (role["id"].as_str(), role["name"].as_str()) {
+                                source_role_name_map.insert(role_id.to_string(), role_name.to_string());
+                            }
+                        }
+                    }
+                }
+            } else {
+                emit_log(format!("[WARNING] Failed to fetch source roles for permissions. Status: {}", resp.status()));
+            }
+        } else {
+            emit_log("[WARNING] Network error fetching source roles for permissions".to_string());
+        }
+
+        let mut target_role_name_map: HashMap<String, String> = HashMap::new();
+        if let Ok(resp) = client.get(&target_roles_url).header("Authorization", &user_token).send().await {
+            if resp.status().is_success() {
+                if let Ok(roles) = resp.json::<Value>().await {
+                    if let Some(roles_array) = roles.as_array() {
+                        for role in roles_array {
+                            if let (Some(role_id), Some(role_name)) = (role["id"].as_str(), role["name"].as_str()) {
+                                target_role_name_map.insert(role_name.to_string(), role_id.to_string());
+                            }
+                        }
+                    }
+                }
+            } else {
+                emit_log(format!("[WARNING] Failed to fetch target roles for permissions. Status: {}", resp.status()));
+            }
+        } else {
+            emit_log("[WARNING] Network error fetching target roles for permissions".to_string());
+        }
+
+        for (source_id, source_name) in source_role_name_map {
+            if source_id == source_server_id {
+                role_id_map.insert(source_id, target_server_id.clone());
+                continue;
+            }
+            if let Some(target_id) = target_role_name_map.get(&source_name) {
+                role_id_map.insert(source_id, target_id.to_string());
+            }
+        }
+    }
+
     if options.channels {
         emit_log("[+] Deleting existing channels in target server...".to_string());
         let target_channels_url = format!("{}/guilds/{}/channels", base_url, target_server_id);
@@ -2713,11 +2986,24 @@ pub async fn clone_discord_server(
                     check_cancel()?;
                     if channel["type"].as_u64() == Some(4) {
                         if let Some(channel_name) = channel["name"].as_str() {
-                            let channel_data = serde_json::json!({
+                            let mut channel_data = serde_json::json!({
                                 "name": channel_name,
                                 "type": 4,
                                 "position": channel["position"].as_u64().unwrap_or(0),
                             });
+
+                            if options.channel_permissions {
+                                let overwrites = build_permission_overwrites(
+                                    &role_id_map,
+                                    &source_server_id,
+                                    &target_server_id,
+                                    &channel["permission_overwrites"],
+                                    &emit_log,
+                                );
+                                if !overwrites.is_empty() {
+                                    channel_data["permission_overwrites"] = Value::Array(overwrites);
+                                }
+                            }
 
                             let create_channel_url = format!("{}/guilds/{}/channels", base_url, target_server_id);
                             match client.post(&create_channel_url)
@@ -2773,6 +3059,19 @@ pub async fn clone_discord_server(
                                 }
                             }
 
+                            if options.channel_permissions {
+                                let overwrites = build_permission_overwrites(
+                                    &role_id_map,
+                                    &source_server_id,
+                                    &target_server_id,
+                                    &channel["permission_overwrites"],
+                                    &emit_log,
+                                );
+                                if !overwrites.is_empty() {
+                                    channel_data["permission_overwrites"] = Value::Array(overwrites);
+                                }
+                            }
+
                             let create_channel_url = format!("{}/guilds/{}/channels", base_url, target_server_id);
                             match client.post(&create_channel_url)
                                 .header("Authorization", &user_token)
@@ -2800,10 +3099,6 @@ pub async fn clone_discord_server(
         } else {
             emit_log(format!("[WARNING] Failed to fetch channels. Status: {}", channels_resp.status()));
         }
-    }
-
-    if options.channel_permissions {
-        emit_log("[WARNING] Channel permissions cloning is not yet implemented".to_string());
     }
 
     if options.emojis {
@@ -4002,113 +4297,6 @@ pub async fn get_token_info(user_token: String) -> Result<String, String> {
             }
         };
         Err(error_msg)
-    }
-}
-
-#[tauri::command]
-pub async fn grab_avatar(user_token: String, user_id: String, size: u32) -> Result<String, String> {
-    check_auth()?;
-    use serde_json::Value;
-
-    let user_token = validate_discord_token(&user_token)?;
-
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(30))
-        .build()
-        .map_err(|e| format!("Client oluşturulamadı: {}", e))?;
-
-    let base_url = "https://discord.com/api/v10";
-
-    if size > 4096 {
-        return Err("Avatar boyutu çok büyük (max 4096)".to_string());
-    }
-
-    let (auth_token, me_id) = resolve_discord_auth(&client, base_url, &user_token).await?;
-    let target_user_id = if user_id.trim().is_empty() || user_id.trim().to_lowercase() == "@me" {
-        me_id.ok_or("Token'dan kullanıcı ID'si alınamadı. Token geçersiz olabilir.".to_string())?
-    } else {
-        validate_discord_id(&user_id)?
-    };
-    
-    if target_user_id.is_empty() {
-        return Err("Kullanıcı ID'si alınamadı".to_string());
-    }
-    
-    let url = format!("{}/users/{}", base_url, target_user_id);
-
-    match client
-        .get(&url)
-        .header("Authorization", &auth_token)
-        .header("Content-Type", "application/json")
-        .send()
-        .await
-    {
-        Ok(resp) => {
-            if resp.status().is_success() {
-                match resp.json::<Value>().await {
-                    Ok(user_data) => {
-                        let avatar_hash = user_data["avatar"].as_str();
-                        let user_id_str = user_data["id"].as_str().unwrap_or(&target_user_id);
-
-                        if let Some(hash) = avatar_hash {
-                            if !hash.is_empty() && hash != "null" {
-                                let avatar_url = format!(
-                                    "https://cdn.discordapp.com/avatars/{}/{}.png?size={}",
-                                    user_id_str, hash, size
-                                );
-                                Ok(avatar_url)
-                            } else {
-                                let default_index = user_id_str.parse::<u64>().unwrap_or(0) % 5;
-                                let default_avatar = format!(
-                                    "https://cdn.discordapp.com/embed/avatars/{}.png?size={}",
-                                    default_index, size
-                                );
-                                Ok(default_avatar)
-                            }
-                        } else {
-                            let default_index = user_id_str.parse::<u64>().unwrap_or(0) % 5;
-                            let default_avatar = format!(
-                                "https://cdn.discordapp.com/embed/avatars/{}.png?size={}",
-                                default_index, size
-                            );
-                            Ok(default_avatar)
-                        }
-                    }
-                    Err(e) => Err(format!("Kullanıcı verisi ayrıştırılamadı: {}", e)),
-                }
-            } else {
-                let status = resp.status();
-                let error_text = resp.text().await.unwrap_or_else(|_| "Bilinmeyen hata".to_string());
-                
-                let error_msg = if status == 401 || status == 403 {
-                    if let Ok(error_json) = serde_json::from_str::<serde_json::Value>(&error_text) {
-                        let message = error_json["message"].as_str().unwrap_or("Yetkilendirme hatası");
-                        if message.contains("Unauthorized") || message.contains("Yetkilendirilmemiş") || message.contains("Invalid") {
-                            "Token geçersiz veya süresi dolmuş. Lütfen geçerli bir token girin.".to_string()
-                        } else {
-                            format!("Discord API hatası: {}", message)
-                        }
-                    } else {
-                        "Token geçersiz veya süresi dolmuş. Lütfen geçerli bir token girin.".to_string()
-                    }
-                } else if status == 404 {
-                    "Kullanıcı bulunamadı. Kullanıcı ID'sini kontrol edin.".to_string()
-                } else {
-                    format!("Discord API hatası (Status {}): {}", status, error_text)
-                };
-                
-                Err(error_msg)
-            }
-        }
-        Err(e) => {
-            if e.is_timeout() {
-                Err("Discord API yanıt vermiyor (timeout). Lütfen tekrar deneyin.".to_string())
-            } else if e.is_connect() {
-                Err("Discord API'ye bağlanılamıyor. İnternet bağlantınızı kontrol edin.".to_string())
-            } else {
-                Err(format!("İstek başarısız: {}", e))
-            }
-        }
     }
 }
 

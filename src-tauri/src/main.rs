@@ -18,6 +18,7 @@ fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             if let Some(window) = app.get_webview_window(obfstr!("main")) {
                 let _ = window.show();
@@ -140,9 +141,11 @@ fn main() {
             commands::open_device_manager,
             commands::scan_device_issues,
             commands::scan_app_leftovers,
+            commands::scan_registry_health,
             commands::apply_storage_sense_profile,
             commands::run_privacy_audit,
             commands::scan_hidden_services,
+            commands::scan_open_ports,
             commands::analyze_junk_origins,
             commands::apply_power_audio_optimizations,
             commands::revert_power_audio_optimizations,
@@ -203,7 +206,6 @@ fn main() {
             commands::clone_role,
             commands::check_token,
             commands::get_token_info,
-            commands::grab_avatar,
             commands::spam_webhook,
             commands::stop_webhook_spam,
             commands::delete_webhook,

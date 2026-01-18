@@ -1,6 +1,6 @@
 import React from 'react';
 import { UtilityCard } from '../components/Cards/UtilityCard';
-import { Server, MessageSquare, Smile, User, Trash2, Mail, Eraser, Shield, CheckCircle, Info, Image, Webhook, HardDrive, Sparkles, Gamepad2 } from 'lucide-react';
+import { Server, MessageSquare, Smile, User, Trash2, Mail, Eraser, Shield, CheckCircle, Info, Webhook, HardDrive, Sparkles, Gamepad2 } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useModal } from '../contexts/ModalContext';
 import { DiscordClonerModal } from '../components/Discord/DiscordClonerModal';
@@ -13,7 +13,6 @@ import { ChannelPurgeModal } from '../components/Discord/ChannelPurgeModal';
 import { RoleClonerModal } from '../components/Discord/RoleClonerModal';
 import { TokenCheckerModal } from '../components/Discord/TokenCheckerModal';
 import { TokenInfoModal } from '../components/Discord/TokenInfoModal';
-import { AvatarGrabberModal } from '../components/Discord/AvatarGrabberModal';
 import { WebhookSpammerModal } from '../components/Discord/WebhookSpammerModal';
 import { WebhookDeleterModal } from '../components/Discord/WebhookDeleterModal';
 import { ServerBackupModal } from '../components/Discord/ServerBackupModal';
@@ -115,14 +114,6 @@ const Discord: React.FC = () => {
     );
   };
 
-  const handleOpenAvatarGrabber = () => {
-    openModal(
-      'avatar-grabber',
-      t('discord_avatar_grabber_title'),
-      <AvatarGrabberModal modalId="avatar-grabber" />,
-      t('discord_avatar_grabber_description')
-    );
-  };
 
   const handleOpenWebhookSpammer = () => {
     openModal(
@@ -291,16 +282,6 @@ const Discord: React.FC = () => {
           variant="info"
           actionLabel={t('discord_open_tool')}
           onClick={handleOpenCustomRPC}
-        />
-
-        <UtilityCard
-          icon={Image}
-          title={t('discord_avatar_grabber_title')}
-          description={t('discord_avatar_grabber_description')}
-          actionType="button"
-          variant="info"
-          actionLabel={t('discord_open_tool')}
-          onClick={handleOpenAvatarGrabber}
         />
 
         

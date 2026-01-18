@@ -46,18 +46,7 @@ body {
   background: var(--bg-primary);
   color: var(--text-primary);
   overflow: hidden;
-}
-
-body[data-font-scale="sm"] {
-  font-size: 13px;
-}
-
-body[data-font-scale="md"] {
   font-size: 14px;
-}
-
-body[data-font-scale="lg"] {
-  font-size: 15px;
 }
 
 body[data-contrast="soft"] {

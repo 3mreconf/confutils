@@ -253,6 +253,10 @@ export const scanAppLeftovers = async (appName: string): Promise<string> => {
   return await invoke<string>('scan_app_leftovers', { appName });
 };
 
+export const scanRegistryHealth = async (): Promise<string> => {
+  return await invoke<string>('scan_registry_health');
+};
+
 export const applyStorageSenseProfile = async (profile: 'light' | 'balanced' | 'aggressive'): Promise<string> => {
   return await invoke<string>('apply_storage_sense_profile', { profile });
 };
@@ -267,6 +271,10 @@ export const disableStorageSense = async (): Promise<string> => {
 
 export const scanHiddenServices = async (): Promise<string> => {
   return await invoke<string>('scan_hidden_services');
+};
+
+export const scanOpenPorts = async (): Promise<string> => {
+  return await invoke<string>('scan_open_ports');
 };
 
 export const analyzeJunkOrigins = async (): Promise<string> => {
@@ -467,9 +475,6 @@ export const getTokenInfo = async (userToken: string): Promise<string> => {
   return await invoke<string>('get_token_info', { userToken });
 };
 
-export const grabAvatar = async (userToken: string, userId: string, size: number = 128): Promise<string> => {
-  return await invoke<string>('grab_avatar', { userToken, userId, size });
-};
 
 export const checkDiscordToken = async (userToken: string): Promise<string> => {
   return await invoke<string>('check_token', { userToken });
@@ -479,9 +484,6 @@ export const getDiscordTokenInfo = async (userToken: string): Promise<string> =>
   return await invoke<string>('get_token_info', { userToken });
 };
 
-export const grabDiscordAvatar = async (userToken: string, userId: string, size: number = 128): Promise<string> => {
-  return await invoke<string>('grab_avatar', { userToken, userId, size });
-};
 
 export const spamReactions = async (
   userToken: string,
