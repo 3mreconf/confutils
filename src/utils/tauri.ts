@@ -249,6 +249,10 @@ export const scanDeviceIssues = async (): Promise<string> => {
   return await invoke<string>('scan_device_issues');
 };
 
+export const scanOutdatedDrivers = async (): Promise<string> => {
+  return await invoke<string>('scan_outdated_drivers');
+};
+
 export const scanAppLeftovers = async (appName: string): Promise<string> => {
   return await invoke<string>('scan_app_leftovers', { appName });
 };
@@ -267,6 +271,10 @@ export const runPrivacyAudit = async (): Promise<string> => {
 
 export const disableStorageSense = async (): Promise<string> => {
   return await invoke<string>('disable_storage_sense');
+};
+
+export const getFastStartupStatus = async (): Promise<string> => {
+  return await invoke<string>('get_fast_startup_status');
 };
 
 export const scanHiddenServices = async (): Promise<string> => {

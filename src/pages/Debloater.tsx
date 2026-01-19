@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { List, type RowComponentProps } from 'react-window';
 import { Trash2, Loader2, Package, RefreshCw } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useNotification } from '../contexts/NotificationContext';
@@ -21,6 +22,27 @@ const Debloater: React.FC = () => {
   const [logs, setLogs] = useState<string[]>([]);
   const [currentApp, setCurrentApp] = useState<string | null>(null);
   const [showConfirm, setShowConfirm] = useState(false);
+  const [searchInput, setSearchInput] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+
+  useEffect(() => {
+    const trimmed = searchInput.trim();
+    const timer = setTimeout(() => {
+      setSearchQuery(trimmed);
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [searchInput]);
+
+  const filteredApps = useMemo(() => {
+    if (!searchQuery) {
+      return apps;
+    }
+    const query = searchQuery.toLowerCase();
+    return apps.filter((app) =>
+      (app.Name && app.Name.toLowerCase().includes(query)) ||
+      (app.PackageFullName && app.PackageFullName.toLowerCase().includes(query))
+    );
+  }, [apps, searchQuery]);
 
   const fetchApps = async () => {
     setLoading(true);
@@ -131,12 +153,38 @@ const Debloater: React.FC = () => {
   };
 
   const handleSelectAll = () => {
-    const ids = apps.map(a => a.PackageFullName);
+    const ids = filteredApps.map(a => a.PackageFullName);
     setSelectedApps(ids);
   };
 
   const handleDeselectAll = () => {
     setSelectedApps([]);
+  };
+
+  type DebloaterRowProps = { items: AppxPackage[] };
+  const renderDebloaterRow = ({
+    index,
+    style,
+    ariaAttributes,
+    items
+  }: RowComponentProps<DebloaterRowProps>) => {
+    const app = items[index];
+    if (!app) return null;
+    return (
+      <div style={style} {...ariaAttributes}>
+        <label className={`app-card ${selectedApps.includes(app.PackageFullName) ? 'selected' : ''}`}>
+          <div className="app-card-content">
+            <input
+              type="checkbox"
+              checked={selectedApps.includes(app.PackageFullName)}
+              onChange={() => toggleApp(app.PackageFullName)}
+              disabled={removing}
+            />
+            <span className="app-name" title={app.PackageFullName}>{app.Name}</span>
+          </div>
+        </label>
+      </div>
+    );
   };
 
   return (
@@ -146,9 +194,21 @@ const Debloater: React.FC = () => {
           <h1>{t('debloater_page_title')}</h1>
           <p>{t('debloater_page_description')}</p>
         </div>
-        <button className="refresh-btn" onClick={fetchApps} disabled={loading || removing} title={t('refresh_list')}>
-          <RefreshCw size={20} className={loading ? 'spinner' : ''} />
-        </button>
+        <div className="installed-controls">
+          <div className="search-box">
+            <Package size={20} />
+            <input
+              type="text"
+              placeholder={t('search_installed_apps') || 'Search installed apps...'}
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              disabled={loading || removing}
+            />
+          </div>
+          <button className="refresh-btn" onClick={fetchApps} disabled={loading || removing} title={t('refresh_list')}>
+            <RefreshCw size={20} className={loading ? 'spinner' : ''} />
+          </button>
+        </div>
       </div>
 
       <div className="installer-container">
@@ -159,7 +219,7 @@ const Debloater: React.FC = () => {
               <Loader2 size={32} />
               <p>{t('loading_apps')}</p>
             </div>
-          ) : apps.length === 0 ? (
+          ) : filteredApps.length === 0 ? (
             <div className="no-results">
               <p>{t('no_apps_found')}</p>
             </div>
@@ -168,28 +228,21 @@ const Debloater: React.FC = () => {
               <div className="category-header">
                 <div className="category-title">
                   <Package size={20} className="category-icon" />
-                  <h3>{t('installed_store_apps')} ({apps.length})</h3>
+                  <h3>{t('installed_store_apps')} ({filteredApps.length})</h3>
                 </div>
                 <div className="category-actions">
                   <button onClick={handleSelectAll} title={t('installer_select_all')}>+</button>
                   <button onClick={handleDeselectAll} title={t('installer_deselect_all')}>-</button>
                 </div>
               </div>
-              <div className="apps-list">
-                {apps.map((app) => (
-                  <label key={app.PackageFullName} className={`app-card ${selectedApps.includes(app.PackageFullName) ? 'selected' : ''}`}>
-                    <div className="app-card-content">
-                      <input
-                        type="checkbox"
-                        checked={selectedApps.includes(app.PackageFullName)}
-                        onChange={() => toggleApp(app.PackageFullName)}
-                        disabled={removing}
-                      />
-                      <span className="app-name" title={app.PackageFullName}>{app.Name}</span>
-                    </div>
-                  </label>
-                ))}
-              </div>
+              <List
+                className="apps-list-virtual"
+                rowCount={filteredApps.length}
+                rowHeight={34}
+                rowComponent={renderDebloaterRow}
+                rowProps={{ items: filteredApps }}
+                style={{ height: 600, width: '100%' }}
+              />
             </div>
           )}
         </div>

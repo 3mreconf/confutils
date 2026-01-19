@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { UtilityCard } from '../components/Cards/UtilityCard';
 import { ProcessModal, ProcessStep } from '../components/UI/ProcessModal';
 import { ConfirmDialog } from '../components/UI/ConfirmDialog';
-import { HardDrive, Search, Trash2, Database, Wifi, Home, Gamepad2, Moon, Zap, ZapOff, Settings } from 'lucide-react';
+import { HardDrive, Search, Trash2, Database, Wifi, Home, Gamepad2, Moon, Zap, ZapOff, Settings, Cpu } from 'lucide-react';
 import {
   clearTempFiles,
   optimizeSsd,
@@ -14,10 +14,30 @@ import {
   disableHibernation,
   addUltimatePowerPlan,
   removeUltimatePowerPlan,
-  setServicesManual
+  setServicesManual,
+  scanOutdatedDrivers,
+  getFastStartupStatus
 } from '../utils/tauri';
 import { useNotification } from '../contexts/NotificationContext';
 import { useLanguage } from '../contexts/LanguageContext';
+
+interface DriverScanItem {
+  Name?: string;
+  DriverVersion?: string;
+  DriverDate?: string;
+  Manufacturer?: string;
+  AgeYears?: number;
+  Outdated?: boolean;
+  OfficialUrl?: string;
+  SearchUrl?: string;
+}
+
+interface FastStartupStatus {
+  FastStartupEnabled?: boolean;
+  HibernationEnabled?: boolean;
+  EffectiveFastStartup?: boolean;
+  Recommendation?: string;
+}
 
 const Optimization = () => {
   const { showNotification } = useNotification();
@@ -31,6 +51,10 @@ const Optimization = () => {
   const [confirmAction, setConfirmAction] = useState<(() => void) | null>(null);
   const [confirmTitle, setConfirmTitle] = useState('');
   const [confirmMessage, setConfirmMessage] = useState('');
+  const [driverScanLoading, setDriverScanLoading] = useState(false);
+  const [driverScanItems, setDriverScanItems] = useState<DriverScanItem[]>([]);
+  const [fastStartupLoading, setFastStartupLoading] = useState(false);
+  const [fastStartupStatus, setFastStartupStatus] = useState<FastStartupStatus | null>(null);
 
   const updateStep = (id: string, status: ProcessStep['status'], message?: string) => {
     setProcessSteps(prev => prev.map(step =>
@@ -292,6 +316,46 @@ const Optimization = () => {
       const currentStep = processSteps.find(s => s.status === 'running')?.id || '3';
       updateStep(currentStep, 'error', `${error}`);
       showNotification('error', t('error'), `${error}`);
+    }
+  };
+
+  const handleScanDrivers = async () => {
+    setDriverScanLoading(true);
+    setDriverScanItems([]);
+    try {
+      const result = await scanOutdatedDrivers();
+      const parsed = JSON.parse(result || '[]');
+      if (Array.isArray(parsed)) {
+        setDriverScanItems(parsed as DriverScanItem[]);
+      } else {
+        setDriverScanItems([]);
+      }
+      showNotification('success', t('success'), t('utility_driver_scan_completed') || t('utility_driver_scan_button'));
+    } catch (error) {
+      showNotification('error', t('error'), `${error}`);
+    } finally {
+      setDriverScanLoading(false);
+    }
+  };
+
+  const handleCheckFastStartup = async () => {
+    setFastStartupLoading(true);
+    setFastStartupStatus(null);
+    try {
+      const result = await getFastStartupStatus();
+      const parsed = JSON.parse(result || '{}');
+      if (parsed && typeof parsed === 'object') {
+        setFastStartupStatus({
+          FastStartupEnabled: parsed.FastStartupEnabled,
+          HibernationEnabled: parsed.HibernationEnabled,
+          EffectiveFastStartup: parsed.EffectiveFastStartup,
+          Recommendation: parsed.Recommendation
+        });
+      }
+    } catch (error) {
+      showNotification('error', t('error'), `${error}`);
+    } finally {
+      setFastStartupLoading(false);
     }
   };
 
@@ -577,6 +641,78 @@ const Optimization = () => {
             technicalDetails: t('optimization_disable_hibernation_tech_details'),
           }}
         />
+
+        <UtilityCard
+          icon={Cpu}
+          title={t('utility_driver_scan_title')}
+          description={t('utility_driver_scan_description')}
+          actionType="custom"
+        >
+          <div>
+            <button className="action-btn" onClick={handleScanDrivers} disabled={driverScanLoading}>
+              {driverScanLoading ? t('utility_scanning') : t('utility_driver_scan_button')}
+            </button>
+          </div>
+          {driverScanItems.length === 0 && !driverScanLoading ? (
+            <div className="utility-result">
+              <div className="utility-result-row">
+                <span>{t('utility_driver_scan_empty')}</span>
+              </div>
+            </div>
+          ) : (
+            <div className="utility-result-list">
+              {driverScanItems.map((item) => (
+                <div key={`${item.Name}-${item.DriverVersion}`} className="utility-result-item">
+                  <div className="utility-result-item-title">{item.Name}</div>
+                  <div>{t('utility_driver_scan_vendor')}: {item.Manufacturer || '-'}</div>
+                  <div>{t('utility_driver_scan_version')}: {item.DriverVersion || '-'}</div>
+                  <div>{t('utility_driver_scan_age')}: {item.AgeYears || 0}y</div>
+                  <div>
+                    <a
+                      className="utility-link"
+                      href={item.OfficialUrl || item.SearchUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      {t('utility_driver_scan_link')}
+                    </a>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </UtilityCard>
+
+        <UtilityCard
+          icon={Zap}
+          title={t('utility_fast_startup_title')}
+          description={t('utility_fast_startup_description')}
+          actionType="custom"
+        >
+          <div>
+            <button className="action-btn" onClick={handleCheckFastStartup} disabled={fastStartupLoading}>
+              {fastStartupLoading ? t('utility_scanning') : t('utility_fast_startup_check')}
+            </button>
+          </div>
+          {fastStartupStatus && (
+            <div className="utility-result">
+              <div className="utility-result-row">
+                <span>{t('utility_fast_startup_status')}</span>
+                <span>{fastStartupStatus.EffectiveFastStartup ? t('enabled') || 'Enabled' : t('disabled') || 'Disabled'}</span>
+              </div>
+              <div className="utility-result-row">
+                <span>{t('utility_fast_startup_hibernation')}</span>
+                <span>{fastStartupStatus.HibernationEnabled ? t('enabled') || 'Enabled' : t('disabled') || 'Disabled'}</span>
+              </div>
+              {fastStartupStatus.Recommendation && (
+                <div className="utility-result-row">
+                  <span>{t('utility_fast_startup_recommendation')}</span>
+                  <span>{fastStartupStatus.Recommendation}</span>
+                </div>
+              )}
+            </div>
+          )}
+        </UtilityCard>
 
         <UtilityCard
           icon={Zap}

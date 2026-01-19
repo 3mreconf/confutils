@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, Suspense, lazy } from 'react';
 import { Sidebar } from './components/Layout/Sidebar';
 import { Header } from './components/Layout/Header';
 import { MainContent } from './components/Layout/MainContent';
@@ -13,20 +13,20 @@ import './styles/globals.css';
 import './styles/theme.css';
 import './App.css';
 
-import Dashboard from './pages/Dashboard';
-import Privacy from './pages/Privacy';
-import Services from './pages/Services';
-import Optimization from './pages/Optimization';
-import Settings from './pages/Settings';
-import AdvancedTweaks from './pages/AdvancedTweaks';
-import Fixes from './pages/Fixes';
-import Installer from './pages/Installer';
-import Debloater from './pages/Debloater';
-import Discord from './pages/Discord';
-import BackupRecovery from './pages/BackupRecovery';
-import SystemMonitor from './pages/SystemMonitor';
-import NetworkManager from './pages/NetworkManager';
-import About from './pages/About';
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const Privacy = lazy(() => import('./pages/Privacy'));
+const Services = lazy(() => import('./pages/Services'));
+const Optimization = lazy(() => import('./pages/Optimization'));
+const Settings = lazy(() => import('./pages/Settings'));
+const AdvancedTweaks = lazy(() => import('./pages/AdvancedTweaks'));
+const Fixes = lazy(() => import('./pages/Fixes'));
+const Installer = lazy(() => import('./pages/Installer'));
+const Debloater = lazy(() => import('./pages/Debloater'));
+const Discord = lazy(() => import('./pages/Discord'));
+const BackupRecovery = lazy(() => import('./pages/BackupRecovery'));
+const SystemMonitor = lazy(() => import('./pages/SystemMonitor'));
+const NetworkManager = lazy(() => import('./pages/NetworkManager'));
+const About = lazy(() => import('./pages/About'));
 
 function App() {
   const [activePage, setActivePage] = useState('dashboard');
@@ -76,6 +76,7 @@ function App() {
     if (mainContent) {
       mainContent.scrollTop = 0;
     }
+    document.body.dataset.page = activePage;
   }, [activePage]);
 
   useEffect(() => {
@@ -88,6 +89,18 @@ function App() {
       }
     } catch (error) {
       console.error('Failed to apply UI preferences:', error);
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
+      const cores = navigator.hardwareConcurrency || 4;
+      const memory = (navigator as { deviceMemory?: number }).deviceMemory || 4;
+      if (cores <= 4 || memory <= 4) {
+        document.body.dataset.performance = 'low';
+      }
+    } catch {
+      return;
     }
   }, []);
 
@@ -149,6 +162,9 @@ function App() {
     };
 
     const pollSystemChanges = async () => {
+      if (document.visibilityState !== 'visible') {
+        return;
+      }
       if (!notificationsEnabled()) {
         return;
       }
@@ -278,7 +294,9 @@ function App() {
           onPageChange={setActivePage}
         />
         <MainContent>
-          {renderPage()}
+          <Suspense fallback={<div className="loading-state">{t('loading') || 'Loading...'}</div>}>
+            {renderPage()}
+          </Suspense>
         </MainContent>
       </div>
       <ToastContainer />

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { List, type RowComponentProps } from 'react-window';
 import { 
   Download, 
   Loader2, 
@@ -344,6 +345,7 @@ const Installer: React.FC = () => {
   const [currentApp, setCurrentApp] = useState<string | null>(null);
   const [installedApps, setInstalledApps] = useState<InstalledApp[]>([]);
   const [loadingInstalled, setLoadingInstalled] = useState(false);
+  const [searchInput, setSearchInput] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [history, setHistory] = useState<InstallationHistory[]>([]);
   const [updateModalOpen, setUpdateModalOpen] = useState(false);
@@ -919,8 +921,16 @@ const Installer: React.FC = () => {
     setSelectedApps(selectedApps.filter(id => !ids.includes(id)));
   };
 
+  useEffect(() => {
+    const trimmed = searchInput.trim();
+    const timer = setTimeout(() => {
+      setSearchQuery(trimmed);
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [searchInput]);
+
   const filteredInstalledApps = useMemo(() => {
-    if (!searchQuery.trim()) {
+    if (!searchQuery) {
       return installedApps;
     }
     const query = searchQuery.toLowerCase();
@@ -931,6 +941,64 @@ const Installer: React.FC = () => {
       (app.Available && app.Available.toLowerCase().includes(query))
     );
   }, [installedApps, searchQuery]);
+
+  const updatesApps = useMemo(() => {
+    return filteredInstalledApps.filter(app => app.Available && app.Available !== app.Version);
+  }, [filteredInstalledApps]);
+
+  type InstalledRowProps = { items: InstalledApp[] };
+  const renderInstalledRow = ({
+    index,
+    style,
+    ariaAttributes,
+    items
+  }: RowComponentProps<InstalledRowProps>) => {
+    const app = items[index];
+    if (!app) return null;
+    return (
+      <div style={style} {...ariaAttributes}>
+        <div className="installed-app-item">
+          <div className="app-info">
+            <h4 className="app-name">{app.Name || app.Id}</h4>
+            <p className="app-version">{t('version') || 'Version'}: {app.Version}</p>
+          </div>
+          <div className="app-actions">
+            <button
+              className="action-btn uninstall-btn"
+              onClick={() => handleUninstall(app.Id, app.Name)}
+              disabled={isInstalledBusy || currentApp === app.Id}
+              title={t('uninstall_app') || 'Uninstall App'}
+            >
+              <Trash2 size={16} />
+              {t('uninstall') || 'Uninstall'}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  type UpdateRowProps = { items: InstalledApp[] };
+  const renderUpdateRow = ({
+    index,
+    style,
+    ariaAttributes,
+    items
+  }: RowComponentProps<UpdateRowProps>) => {
+    const app = items[index];
+    if (!app) return null;
+    return (
+      <div style={style} {...ariaAttributes}>
+        <div className="update-item">
+          <div className="update-info">
+            <h4 className="update-name">{app.Name || app.Id}</h4>
+            <p className="update-current">{t('current_version') || 'Current'}: {app.Version}</p>
+            <p className="update-available">{t('available_version') || 'Available'}: {app.Available}</p>
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div className="page-container installer-page">
@@ -1070,8 +1138,8 @@ const Installer: React.FC = () => {
                 <input
                   type="text"
                   placeholder={t('search_installed_apps') || 'Search installed apps...'}
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
+                  value={searchInput}
+                  onChange={(e) => setSearchInput(e.target.value)}
                   disabled={isInstalledBusy}
                 />
               </div>
@@ -1092,27 +1160,14 @@ const Installer: React.FC = () => {
                 <p>{t('no_installed_apps') || 'No installed apps found'}</p>
               </div>
             ) : (
-              <div className="installed-apps-list">
-                {filteredInstalledApps.map((app) => (
-                  <div key={app.Id || `${app.Name}-${app.Version}`} className="installed-app-item">
-                    <div className="app-info">
-                      <h4 className="app-name">{app.Name || app.Id}</h4>
-                      <p className="app-version">{t('version') || 'Version'}: {app.Version}</p>
-                    </div>
-                    <div className="app-actions">
-                      <button
-                        className="action-btn uninstall-btn"
-                        onClick={() => handleUninstall(app.Id, app.Name)}
-                        disabled={isInstalledBusy || currentApp === app.Id}
-                        title={t('uninstall_app') || 'Uninstall App'}
-                      >
-                        <Trash2 size={16} />
-                        {t('uninstall') || 'Uninstall'}
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
+              <List
+                className="installed-apps-virtual"
+                rowCount={filteredInstalledApps.length}
+                rowHeight={104}
+                rowComponent={renderInstalledRow}
+                rowProps={{ items: filteredInstalledApps }}
+                style={{ height: 600, width: '100%' }}
+              />
             )}
           </div>
         )}
@@ -1125,17 +1180,14 @@ const Installer: React.FC = () => {
                 {t('refresh') || 'Refresh'}
               </button>
               {(() => {
-                const appsWithUpdates = filteredInstalledApps.filter(
-                  app => app.Available && app.Available !== app.Version
-                );
-                return appsWithUpdates.length > 0 && (
+                return updatesApps.length > 0 && (
                   <button 
                     className="action-btn update-all-btn" 
-                    onClick={() => handleUpdateAll(appsWithUpdates)}
+                    onClick={() => handleUpdateAll(updatesApps)}
                     disabled={isInstalledBusy}
                   >
                     <RefreshCw size={18} />
-                    {t('update_all') || 'Update All'} ({appsWithUpdates.length})
+                    {t('update_all') || 'Update All'} ({updatesApps.length})
                   </button>
                 );
               })()}
@@ -1148,26 +1200,20 @@ const Installer: React.FC = () => {
               </div>
             ) : (
               (() => {
-                const appsWithUpdates = filteredInstalledApps.filter(
-                  app => app.Available && app.Available !== app.Version
-                );
-                return appsWithUpdates.length === 0 ? (
+                return updatesApps.length === 0 ? (
                   <div className="empty-state">
                     <RefreshCw size={48} />
                     <p>{t('no_updates_available') || 'No updates available'}</p>
                   </div>
                 ) : (
-                  <div className="updates-list">
-                    {appsWithUpdates.map((app) => (
-                      <div key={app.Id || `${app.Name}-${app.Version}`} className="update-item">
-                        <div className="update-info">
-                          <h4 className="update-name">{app.Name || app.Id}</h4>
-                          <p className="update-current">{t('current_version') || 'Current'}: {app.Version}</p>
-                          <p className="update-available">{t('available_version') || 'Available'}: {app.Available}</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                  <List
+                    className="updates-virtual"
+                    rowCount={updatesApps.length}
+                    rowHeight={104}
+                    rowComponent={renderUpdateRow}
+                    rowProps={{ items: updatesApps }}
+                    style={{ height: 600, width: '100%' }}
+                  />
                 );
               })()
             )}

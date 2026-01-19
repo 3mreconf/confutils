@@ -250,19 +250,47 @@ const SystemMonitor: React.FC = () => {
       }, 150);
     };
 
-    window.addEventListener('scroll', handleScroll, { passive: true });
-
-    intervalRef.current = setInterval(() => {
-      if (!isScrolling) {
-        fetchStats();
+    const clearIntervalIfNeeded = () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
       }
-    }, 3000);
+    };
+
+    const startInterval = () => {
+      clearIntervalIfNeeded();
+      intervalRef.current = setInterval(() => {
+        if (document.visibilityState !== 'visible') {
+          return;
+        }
+        if (!isScrolling) {
+          fetchStats();
+        }
+      }, 5000);
+    };
+
+    const handleVisibility = () => {
+      if (document.visibilityState !== 'visible') {
+        clearIntervalIfNeeded();
+        return;
+      }
+      if (activeTab === 'overview') {
+        startInterval();
+      }
+    };
+
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    document.addEventListener('visibilitychange', handleVisibility);
+    if (activeTab === 'overview' && document.visibilityState === 'visible') {
+      startInterval();
+    } else {
+      clearIntervalIfNeeded();
+    }
 
     return () => {
       window.removeEventListener('scroll', handleScroll);
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-      }
+      document.removeEventListener('visibilitychange', handleVisibility);
+      clearIntervalIfNeeded();
       clearTimeout(scrollTimeout);
     };
   }, [fetchStats, fetchStartupPrograms, fetchProcesses, activeTab]);

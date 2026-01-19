@@ -1384,6 +1384,80 @@ pub async fn apply_storage_sense_profile(profile: String) -> Result<String, Stri
 }
 
 #[tauri::command]
+pub async fn scan_outdated_drivers() -> Result<String, String> {
+    check_auth()?;
+
+    let command = r#"
+        [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+        $OutputEncoding = [System.Text.Encoding]::UTF8
+        chcp 65001 | Out-Null
+
+        $threshold = (Get-Date).AddYears(-2)
+        $drivers = Get-CimInstance Win32_PnPSignedDriver | Where-Object { $_.DeviceName -and $_.DriverDate } | ForEach-Object {
+            $driverDate = [datetime]$_.DriverDate
+            $ageYears = [math]::Round(((Get-Date) - $driverDate).TotalDays / 365, 1)
+            $outdated = $driverDate -lt $threshold
+            $vendor = if ($_.Manufacturer) { $_.Manufacturer } else { "" }
+            $official = ""
+            if ($vendor -match "Intel") { $official = "https://www.intel.com/content/www/us/en/download-center/home.html" }
+            elseif ($vendor -match "NVIDIA") { $official = "https://www.nvidia.com/Download/index.aspx" }
+            elseif ($vendor -match "AMD|Advanced Micro Devices") { $official = "https://www.amd.com/en/support" }
+            elseif ($vendor -match "Realtek") { $official = "https://www.realtek.com/en/downloads" }
+            elseif ($vendor -match "Qualcomm") { $official = "https://www.qualcomm.com/support" }
+            elseif ($vendor -match "Broadcom") { $official = "https://www.broadcom.com/support/download-search" }
+            [pscustomobject]@{
+                Name = $_.DeviceName
+                DriverVersion = $_.DriverVersion
+                DriverDate = $driverDate.ToString("yyyy-MM-dd")
+                Manufacturer = $vendor
+                AgeYears = $ageYears
+                Outdated = $outdated
+                OfficialUrl = $official
+                SearchUrl = ("https://www.google.com/search?q=" + [uri]::EscapeDataString("$vendor driver download"))
+            }
+        }
+
+        $drivers = $drivers | Where-Object { $_.Outdated -eq $true }
+        $drivers | ConvertTo-Json -Compress
+    "#;
+
+    run_powershell_no_rate_limit(command.to_string()).await
+}
+
+#[tauri::command]
+pub async fn get_fast_startup_status() -> Result<String, String> {
+    check_auth()?;
+
+    let command = r#"
+        [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+        $OutputEncoding = [System.Text.Encoding]::UTF8
+        chcp 65001 | Out-Null
+
+        $hiber = (Get-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Power" -Name "HibernateEnabled" -ErrorAction SilentlyContinue).HibernateEnabled
+        $fast = (Get-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Power" -Name "HiberbootEnabled" -ErrorAction SilentlyContinue).HiberbootEnabled
+        $hiberEnabled = $hiber -eq 1
+        $fastEnabled = $fast -eq 1
+        $effective = $hiberEnabled -and $fastEnabled
+        $recommendation = ""
+        if (-not $hiberEnabled -and $fastEnabled) {
+            $recommendation = "Hibernation disabled; Fast Startup will not work."
+        } elseif ($effective) {
+            $recommendation = "Fast Startup is enabled and active."
+        } else {
+            $recommendation = "Fast Startup is disabled."
+        }
+        [pscustomobject]@{
+            FastStartupEnabled = $fastEnabled
+            HibernationEnabled = $hiberEnabled
+            EffectiveFastStartup = $effective
+            Recommendation = $recommendation
+        } | ConvertTo-Json -Compress
+    "#;
+
+    run_powershell_no_rate_limit(command.to_string()).await
+}
+
+#[tauri::command]
 pub async fn run_privacy_audit() -> Result<String, String> {
     check_auth()?;
 
