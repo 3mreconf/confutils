@@ -167,7 +167,23 @@ async fn run_powershell_internal(command: String, skip_rate_limit: bool, skip_se
             .unwrap_or_else(|_| String::from_utf8_lossy(&stdout).to_string());
         Ok(result.trim().to_string())
     } else {
-        let error = String::from_utf8_lossy(&output.stderr).to_string();
+        let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+        let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+        let raw_error = if stderr.trim().is_empty() { stdout } else { stderr };
+        let cleaned = raw_error
+            .lines()
+            .filter(|line| {
+                let trimmed = line.trim_start();
+                !(trimmed.starts_with("At line:") ||
+                  trimmed.starts_with("+") ||
+                  trimmed.starts_with("CategoryInfo") ||
+                  trimmed.starts_with("FullyQualifiedErrorId"))
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
+            .trim()
+            .to_string();
+        let error = if cleaned.is_empty() { raw_error.trim().to_string() } else { cleaned };
         if error.contains("Access is denied") || error.contains("UnauthorizedAccessException") {
             Err(format!("Yonetici izni gerekli. Hata: {}", error))
         } else {
@@ -2358,11 +2374,16 @@ pub async fn update_winget_package(package_id: String) -> Result<String, String>
 }
 
 #[tauri::command]
-pub async fn uninstall_winget_package(package_id: String) -> Result<String, String> {
+pub async fn uninstall_winget_package(package_id: String, package_name: Option<String>) -> Result<String, String> {
     check_auth()?;
     
     let escaped_id = package_id.replace('"', "`\"");
-    let command = format!(r#"winget uninstall --id "{}" -e --silent --force; if ($LASTEXITCODE -eq 0) {{ "Package uninstalled successfully" }} else {{ throw "Uninstall failed" }}"#, escaped_id);
+    let escaped_name = package_name.unwrap_or_default().replace('"', "`\"");
+    let command = format!(
+        r#"$pkgId = "{}"; $pkgName = "{}"; $commonArgs = @("--silent", "--force"); $out = (winget uninstall --id "$pkgId" -e @commonArgs 2>&1 | Out-String); if ($LASTEXITCODE -ne 0 -and $pkgName -ne "") {{ $out = (winget uninstall --name "$pkgName" -e @commonArgs 2>&1 | Out-String) }}; if ($LASTEXITCODE -eq 0) {{ "Package uninstalled successfully" }} else {{ $msg = $out.Trim(); if ($msg -eq "") {{ $msg = "Winget uninstall failed" }}; $msg; exit 1 }}"#,
+        escaped_id,
+        escaped_name
+    );
     run_powershell_internal(command, false, false).await
 }
 

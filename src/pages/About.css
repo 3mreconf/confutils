@@ -23,19 +23,21 @@
 }
 
 .app-logo {
-  width: 120px;
-  height: 120px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, var(--accent-cyan), var(--accent-purple));
+  width: 104px;
+  height: 104px;
+  border-radius: 20px;
+  background: transparent;
   display: flex;
   align-items: center;
   justify-content: center;
   margin-bottom: 24px;
-  box-shadow: 0 8px 32px rgba(0, 255, 255, 0.3);
+  box-shadow: none;
 }
 
-.app-logo svg {
-  color: white;
+.app-logo-image {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
 }
 
 .app-name {
@@ -177,7 +179,7 @@
   align-items: center;
   gap: 8px;
   padding: 12px 24px;
-  background: linear-gradient(135deg, var(--accent-cyan), var(--accent-purple));
+  background: #0f1115;
   border: none;
   border-radius: var(--radius-md);
   color: white;

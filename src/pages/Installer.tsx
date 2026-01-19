@@ -349,6 +349,7 @@ const Installer: React.FC = () => {
   const [updateModalOpen, setUpdateModalOpen] = useState(false);
   const [updatingApp, setUpdatingApp] = useState<{ id: string; name?: string } | null>(null);
   const [updatingAll, setUpdatingAll] = useState(false);
+  const [actionLoading, setActionLoading] = useState(false);
   const [startupPrograms, setStartupPrograms] = useState<StartupProgram[]>([]);
   const [startupLoading, setStartupLoading] = useState(false);
   const [startupError, setStartupError] = useState<string | null>(null);
@@ -379,6 +380,8 @@ const Installer: React.FC = () => {
   const [appUsageLoading, setAppUsageLoading] = useState(false);
   const fetchingRef = useRef(false);
   const installerTargetRef = useRef<string | null>(null);
+  const isInstalledBusy = loadingInstalled || actionLoading || updatingAll || updateModalOpen || currentApp !== null;
+  const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
   const toggleApp = (id: string) => {
     if (selectedApps.includes(id)) {
@@ -842,6 +845,7 @@ const Installer: React.FC = () => {
   const handleUpdateAll = async (apps: InstalledApp[]) => {
     if (apps.length === 0) return;
     
+    setActionLoading(true);
     setUpdatingAll(true);
     setUpdateModalOpen(true);
     setUpdatingApp({ id: 'all', name: `${apps.length} applications` });
@@ -874,16 +878,21 @@ const Installer: React.FC = () => {
       await fetchInstalledApps();
       setUpdateModalOpen(false);
       setUpdatingApp(null);
+      setActionLoading(false);
     }, 2000);
   };
 
-  const handleUninstall = async (appId: string) => {
-    if (!confirm(t('confirm_uninstall') || `Uninstall ${appId}?`)) return;
+  const handleUninstall = async (appId: string, appName?: string) => {
+    const label = appName || appId;
+    if (!confirm(t('confirm_uninstall') || `Uninstall ${label}?`)) return;
     
+    const startedAt = Date.now();
     try {
+      setActionLoading(true);
       setCurrentApp(appId);
-      await uninstallWingetPackage(appId);
-      showNotification('success', t('success'), `${appId} ${t('uninstalled_successfully') || 'uninstalled successfully'}`);
+      await wait(0);
+      await uninstallWingetPackage(appId, appName);
+      showNotification('success', t('success'), `${label} ${t('uninstalled_successfully') || 'uninstalled successfully'}`);
       addToHistory(appId, 'uninstall', true);
       await fetchInstalledApps();
     } catch (error) {
@@ -891,6 +900,11 @@ const Installer: React.FC = () => {
       addToHistory(appId, 'uninstall', false);
     } finally {
       setCurrentApp(null);
+      const elapsed = Date.now() - startedAt;
+      if (elapsed < 800) {
+        await wait(800 - elapsed);
+      }
+      setActionLoading(false);
     }
   };
 
@@ -1058,15 +1072,16 @@ const Installer: React.FC = () => {
                   placeholder={t('search_installed_apps') || 'Search installed apps...'}
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
+                  disabled={isInstalledBusy}
                 />
               </div>
-              <button className="refresh-btn" onClick={fetchInstalledApps} disabled={loadingInstalled}>
-                <RefreshCw size={18} className={loadingInstalled ? 'spinning' : ''} />
+              <button className="refresh-btn" onClick={fetchInstalledApps} disabled={isInstalledBusy}>
+                <RefreshCw size={18} className={isInstalledBusy ? 'spinning' : ''} />
                 {t('refresh') || 'Refresh'}
               </button>
             </div>
 
-            {loadingInstalled ? (
+            {isInstalledBusy ? (
               <div className="loading-state">
                 <Loader2 size={32} />
                 <p>{t('loading_installed_apps') || 'Loading installed apps...'}</p>
@@ -1087,8 +1102,8 @@ const Installer: React.FC = () => {
                     <div className="app-actions">
                       <button
                         className="action-btn uninstall-btn"
-                        onClick={() => handleUninstall(app.Id)}
-                        disabled={currentApp === app.Id}
+                        onClick={() => handleUninstall(app.Id, app.Name)}
+                        disabled={isInstalledBusy || currentApp === app.Id}
                         title={t('uninstall_app') || 'Uninstall App'}
                       >
                         <Trash2 size={16} />
@@ -1105,8 +1120,8 @@ const Installer: React.FC = () => {
         {activeTab === 'updates' && (
           <div className="updates-tab">
             <div className="updates-controls">
-              <button className="refresh-btn" onClick={fetchInstalledApps} disabled={loadingInstalled || updatingAll}>
-                <RefreshCw size={18} className={loadingInstalled ? 'spinning' : ''} />
+              <button className="refresh-btn" onClick={fetchInstalledApps} disabled={isInstalledBusy}>
+                <RefreshCw size={18} className={isInstalledBusy ? 'spinning' : ''} />
                 {t('refresh') || 'Refresh'}
               </button>
               {(() => {
@@ -1117,7 +1132,7 @@ const Installer: React.FC = () => {
                   <button 
                     className="action-btn update-all-btn" 
                     onClick={() => handleUpdateAll(appsWithUpdates)}
-                    disabled={updatingAll || updateModalOpen}
+                    disabled={isInstalledBusy}
                   >
                     <RefreshCw size={18} />
                     {t('update_all') || 'Update All'} ({appsWithUpdates.length})
@@ -1126,7 +1141,7 @@ const Installer: React.FC = () => {
               })()}
             </div>
 
-            {loadingInstalled ? (
+            {isInstalledBusy ? (
               <div className="loading-state">
                 <Loader2 size={32} />
                 <p>{t('checking_updates') || 'Checking for updates...'}</p>

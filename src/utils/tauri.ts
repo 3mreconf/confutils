@@ -377,8 +377,8 @@ export const updateWingetPackage = async (packageId: string): Promise<string> =>
   return await invoke<string>('update_winget_package', { packageId });
 };
 
-export const uninstallWingetPackage = async (packageId: string): Promise<string> => {
-  return await invoke<string>('uninstall_winget_package', { packageId });
+export const uninstallWingetPackage = async (packageId: string, packageName?: string): Promise<string> => {
+  return await invoke<string>('uninstall_winget_package', { packageId, packageName });
 };
 
 export const getInstalledApps = async (): Promise<string> => {

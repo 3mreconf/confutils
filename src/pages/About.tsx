@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Info, Shield, Globe, MessageSquare, ExternalLink, Github, FileText } from 'lucide-react';
+import { Info, Globe, MessageSquare, ExternalLink, Github, FileText } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { open } from '@tauri-apps/plugin-shell';
 import { getVersion } from '@tauri-apps/api/app';
@@ -36,7 +36,7 @@ const About: React.FC = () => {
       <div className="about-content">
         <div className="about-hero">
           <div className="app-logo">
-            <Shield size={64} />
+            <img className="app-logo-image" src="/logo-conf.png" alt="ConfUtils" />
           </div>
           <h1 className="app-name">ConfUtils</h1>
           <p className="app-version">Version {appVersion || '2.0.0'}</p>
