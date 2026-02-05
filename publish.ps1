@@ -7,9 +7,14 @@ param(
     [string]$BumpType = "patch"
 )
 
-# 1. Check if package.json exists
+# 1. Check if required config files exist
 if (!(Test-Path "package.json")) {
     Write-Host "[ERROR] Could not find package.json in the current directory." -ForegroundColor Red
+    exit 1
+}
+$TauriConfigPath = "src-tauri/tauri.conf.json"
+if (!(Test-Path $TauriConfigPath)) {
+    Write-Host "[ERROR] Could not find tauri.conf.json at $TauriConfigPath" -ForegroundColor Red
     exit 1
 }
 
@@ -48,11 +53,17 @@ switch ($BumpType) {
 $NewVersion = "$major.$minor.$patch"
 $TagVersion = "v$NewVersion"
 
+# 3. Update Config Files
 Write-Host "Updating package.json: $OldVersion -> $NewVersion" -ForegroundColor Green
 $PackageJson.version = $NewVersion
 $PackageJson | ConvertTo-Json | Set-Content "package.json"
 
-# 3. Git operations
+Write-Host "Updating tauri.conf.json: -> $NewVersion" -ForegroundColor Green
+$TauriJson = Get-Content $TauriConfigPath | ConvertFrom-Json
+$TauriJson.version = $NewVersion
+$TauriJson | ConvertTo-Json | Set-Content $TauriConfigPath
+
+# 4. Git operations
 Write-Host "`n[2/4] Committing changes..." -ForegroundColor Yellow
 git add .
 git commit -m "chore: bump version to $NewVersion and sync all configs"
@@ -60,7 +71,7 @@ git commit -m "chore: bump version to $NewVersion and sync all configs"
 Write-Host "`n[3/4] Creating tag $TagVersion..." -ForegroundColor Yellow
 git tag -a $TagVersion -m "Release $TagVersion"
 
-# 4. Pushing to GitHub
+# 5. Pushing to GitHub
 Write-Host "`n[4/4] Pushing to GitHub..." -ForegroundColor Yellow
 git push origin main
 git push origin $TagVersion
