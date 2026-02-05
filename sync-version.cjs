@@ -21,7 +21,7 @@ const files = [
     },
     {
         path: 'src/i18n/translations.ts',
-        regex: /app_version: 'v[0-9]+\.[0-9]+\.[0-9]+'/,
+        regex: /app_version: 'v[0-9]+\.[0-9]+\.[0-9]+'/g,
         replacement: `app_version: 'v${newVersion}'`
     }
 ];
