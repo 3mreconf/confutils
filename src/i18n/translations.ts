@@ -1,7 +1,7 @@
 ﻿export const translations = {
   en: {
     app_name: 'ConfUtils',
-    app_version: 'v2.1.17',
+    app_version: 'v2.1.18',
     nav_overview: 'Overview',
     nav_system: 'System',
     nav_security: 'Security',
@@ -674,7 +674,7 @@
   },
   tr: {
     app_name: 'ConfUtils',
-    app_version: 'v2.1.17',
+    app_version: 'v2.1.18',
     nav_overview: 'Genel Bakış',
     nav_system: 'Sistem',
     nav_security: 'Güvenlik',
