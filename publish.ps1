@@ -67,26 +67,13 @@ $TauriJson | ConvertTo-Json -Depth 100 | Set-Content $TauriConfigPath
 # 4. Update Source Files (Hardcoded versions)
 Write-Host "`n[3/5] Syncing source code versions..." -ForegroundColor Yellow
 
-# Function to replace version in file
-function Sync-Version($Path, $Regex, $Replacement) {
-    if (Test-Path $Path) {
-        $content = Get-Content $Path -Raw
-        $newContent = $content -replace $Regex, $Replacement
-        $newContent | Set-Content $Path
-        Write-Host "Synced: $Path" -ForegroundColor Gray
-    } else {
-        Write-Host "[WARNING] File not found: $Path" -ForegroundColor DarkYellow
-    }
+# Use Node.js script for safe UTF-8 handling
+node sync-version.cjs $NewVersion
+
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "[ERROR] Version sync failed!" -ForegroundColor Red
+    exit 1
 }
-
-# Sync PremiumApp.tsx
-Sync-Version "src/PremiumApp.tsx" "const currentVersion = '[0-9]+\.[0-9]+\.[0-9]+';" "const currentVersion = '$NewVersion';"
-
-# Sync About.tsx
-Sync-Version "src/premium/pages/About.tsx" "\{t\('version'\)\} [0-9]+\.[0-9]+\.[0-9]+" "{t('version')} $NewVersion"
-
-# Sync translations.ts (app_version: 'v2.1.0')
-Sync-Version "src/i18n/translations.ts" "app_version: 'v[0-9]+\.[0-9]+\.[0-9]+'" "app_version: 'v$NewVersion'"
 
 # 5. Git operations
 Write-Host "`n[4/5] Committing changes..." -ForegroundColor Yellow
