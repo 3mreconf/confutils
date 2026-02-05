@@ -12,7 +12,6 @@ import {
   Info,
   Search,
   Bell,
-  Moon,
   ChevronRight,
   Zap,
   CheckCircle,
@@ -147,7 +146,7 @@ function PremiumApp() {
         if (response.ok) {
           const data = await response.json();
           const latestVersion = data.tag_name.replace('v', '');
-          const currentVersion = '2.1.15'; // Updated to match package.json/translations
+          const currentVersion = '2.1.16'; // Updated to match package.json/translations
 
           const compareVersions = (v1: string, v2: string) => {
             const parts1 = v1.split('.').map(Number);
@@ -380,9 +379,6 @@ function PremiumApp() {
             {/* Actions */}
             <button className="header-action" title={t('notifications' as any)}>
               <Bell size={18} />
-            </button>
-            <button className="header-action" title={t('dark_mode')}>
-              <Moon size={18} />
             </button>
             <button
               className="header-action lang-toggle"

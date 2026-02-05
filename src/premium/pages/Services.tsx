@@ -284,7 +284,7 @@ const ServiceRow = ({
         )}
       </div>
 
-      <div className="flex gap-xs">
+      <div className="flex gap-sm">
         <button
           className="btn btn-icon"
           onClick={onStart}
