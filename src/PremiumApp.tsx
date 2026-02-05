@@ -88,7 +88,7 @@ interface Toast {
 
 // Version Blocker Component
 const UpdateBlocker = ({ onUpdate, t }: { onUpdate: () => void, t: any }) => (
-  <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 backdrop-blur-xl">
+  <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black">
     <div className="max-w-md p-2xl card glass-card text-center border-danger/30">
       <div className="flex justify-center mb-xl">
         <div className="w-16 h-16 rounded-full bg-danger/10 flex items-center justify-center text-danger animate-pulse">
@@ -146,7 +146,7 @@ function PremiumApp() {
         if (response.ok) {
           const data = await response.json();
           const latestVersion = data.tag_name.replace('v', '');
-          const currentVersion = '2.1.16'; // Updated to match package.json/translations
+          const currentVersion = '2.1.17'; // Updated to match package.json/translations
 
           const compareVersions = (v1: string, v2: string) => {
             const parts1 = v1.split('.').map(Number);
