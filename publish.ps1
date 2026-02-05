@@ -1,57 +1,69 @@
-# ConfUtils Publish Script
-# Usage: ./publish.ps1 (auto-increments patch) or ./publish.ps1 "v2.1.2"
+# ConfUtils Advanced Publish Script
+# Usage: ./publish.ps1 -BumpType patch (default) | minor | major
 
-param (
-    [Parameter(Mandatory=$false)]
-    [string]$Version
+param(
+    [Parameter(Position=0)]
+    [ValidateSet("patch", "minor", "major")]
+    [string]$BumpType = "patch"
 )
 
-# 1. Get current version from package.json
+# 1. Check if package.json exists
 if (!(Test-Path "package.json")) {
-    Write-Error "package.json not found!"
+    Write-Host "[ERROR] Could not find package.json in the current directory." -ForegroundColor Red
     exit 1
 }
 
+Write-Host ">>> Creating release with version bump: $BumpType" -ForegroundColor Cyan
+
+# 2. Get current version and bump it
+Write-Host "`n[1/4] Bouncing version..." -ForegroundColor Yellow
 $PackageJson = Get-Content "package.json" | ConvertFrom-Json
 $OldVersion = $PackageJson.version
 
-# 2. Determine new version
-if ([string]::IsNullOrWhiteSpace($Version)) {
-    # Auto-increment patch version (e.g., 2.1.1 -> 2.1.2)
-    $versionParts = $OldVersion.Split('.')
-    if ($versionParts.Count -eq 3) {
-        $patch = [int]$versionParts[2] + 1
-        $NewVersion = "$($versionParts[0]).$($versionParts[1]).$patch"
-    } else {
-        Write-Error "Could not parse version: $OldVersion"
-        exit 1
-    }
-} else {
-    # Use provided version (remove leading 'v' if present)
-    $NewVersion = $Version.Replace('v', '')
+$versionParts = $OldVersion.Split('.')
+if ($versionParts.Count -ne 3) {
+    Write-Host "[ERROR] Could not parse version $OldVersion. Expected format X.Y.Z" -ForegroundColor Red
+    exit 1
 }
 
-$TagVersion = "v" + $NewVersion
+[int]$major = $versionParts[0]
+[int]$minor = $versionParts[1]
+[int]$patch = $versionParts[2]
 
-Write-Host "--- Starting Publish Process for $TagVersion ---" -ForegroundColor Cyan
+switch ($BumpType) {
+    "major" { 
+        $major++
+        $minor = 0
+        $patch = 0
+    }
+    "minor" { 
+        $minor++
+        $patch = 0
+    }
+    "patch" { 
+        $patch++
+    }
+}
 
-# 3. Update package.json
-Write-Host "Updating package.json: $OldVersion -> $NewVersion" -ForegroundColor Yellow
+$NewVersion = "$major.$minor.$patch"
+$TagVersion = "v$NewVersion"
+
+Write-Host "Updating package.json: $OldVersion -> $NewVersion" -ForegroundColor Green
 $PackageJson.version = $NewVersion
 $PackageJson | ConvertTo-Json | Set-Content "package.json"
 
-# 4. Git process
-Write-Host "Staging changes..." -ForegroundColor Gray
+# 3. Git operations
+Write-Host "`n[2/4] Committing changes..." -ForegroundColor Yellow
 git add .
+git commit -m "chore: bump version to $NewVersion and sync all configs"
 
-Write-Host "Committing changes..." -ForegroundColor Gray
-git commit -m "Release $TagVersion"
-
-Write-Host "Creating tag $TagVersion..." -ForegroundColor Gray
+Write-Host "`n[3/4] Creating tag $TagVersion..." -ForegroundColor Yellow
 git tag -a $TagVersion -m "Release $TagVersion"
 
-Write-Host "Pushing to GitHub..." -ForegroundColor Magenta
+# 4. Pushing to GitHub
+Write-Host "`n[4/4] Pushing to GitHub..." -ForegroundColor Yellow
 git push origin main
 git push origin $TagVersion
 
-Write-Host "--- Publish Complete! ---" -ForegroundColor Green
+Write-Host "`nSUCCESS: Release created! GitHub Actions will build and publish the release." -ForegroundColor Green
+Write-Host "Release URL: https://github.com/3mreconf/confutils/releases/tag/$TagVersion" -ForegroundColor Cyan
