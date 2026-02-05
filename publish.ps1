@@ -56,12 +56,12 @@ $TagVersion = "v$NewVersion"
 # 3. Update Config Files
 Write-Host "Updating package.json: $OldVersion -> $NewVersion" -ForegroundColor Green
 $PackageJson.version = $NewVersion
-$PackageJson | ConvertTo-Json | Set-Content "package.json"
+$PackageJson | ConvertTo-Json -Depth 100 | Set-Content "package.json"
 
 Write-Host "Updating tauri.conf.json: -> $NewVersion" -ForegroundColor Green
 $TauriJson = Get-Content $TauriConfigPath | ConvertFrom-Json
 $TauriJson.version = $NewVersion
-$TauriJson | ConvertTo-Json | Set-Content $TauriConfigPath
+$TauriJson | ConvertTo-Json -Depth 100 | Set-Content $TauriConfigPath
 
 # 4. Git operations
 Write-Host "`n[2/4] Committing changes..." -ForegroundColor Yellow
