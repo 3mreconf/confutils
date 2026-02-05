@@ -136,7 +136,7 @@ function PremiumApp() {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [isUpdateRequired, setIsUpdateRequired] = useState(false);
-  const [latestUrl, setLatestUrl] = useState('https://github.com/3mreconf/confutils/releases/latest');
+  const [latestUrl, setLatestUrl] = useState('https://github.com/3mreconf/confutils/releases');
 
   // Version Check
   useEffect(() => {
@@ -146,7 +146,7 @@ function PremiumApp() {
         if (response.ok) {
           const data = await response.json();
           const latestVersion = data.tag_name.replace('v', '');
-          const currentVersion = '2.1.17'; // Updated to match package.json/translations
+          const currentVersion = '2.1.18'; // Updated to match package.json/translations
 
           const compareVersions = (v1: string, v2: string) => {
             const parts1 = v1.split('.').map(Number);
