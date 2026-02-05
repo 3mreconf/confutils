@@ -34,7 +34,7 @@ export default function About({ showToast }: AboutProps) {
               {t('premium')}
             </div>
           </div>
-          <div className="card-title">{t('version')} 2.1.7</div>
+          <div className="card-title">{t('version')} 2.1.8</div>
           <div className="card-description">
             {t('about_premium_desc')}
           </div>
@@ -136,4 +136,5 @@ export default function About({ showToast }: AboutProps) {
     </div>
   );
 }
+
 
