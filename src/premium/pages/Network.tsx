@@ -24,7 +24,7 @@ const StatCard = ({
   change,
   color = 'var(--cyan)'
 }: {
-  icon: React.ComponentType<{ size?: number }>;
+  icon: any;
   label: string;
   value: number | string;
   unit?: string;
@@ -37,7 +37,7 @@ const StatCard = ({
   >
     <div className="flex items-center justify-between mb-md">
       <span className="stat-label">{label}</span>
-      <Icon size={18} style={{ color, opacity: 0.7 }} />
+      <Icon size={18} color={color} className="opacity-70" />
     </div>
     <div className="stat-value">
       {typeof value === 'number' ? Math.round(value) : value}
@@ -81,7 +81,7 @@ export default function Network({ showToast }: NetworkProps) {
           <p className="text-muted mt-sm">{t('network_subtitle')}</p>
         </div>
         <button className="btn btn-secondary" onClick={handleRefresh} disabled={isRefreshing}>
-          <RefreshCw size={16} style={{ animation: isRefreshing ? 'spin 1s linear infinite' : 'none' }} />
+          <RefreshCw size={16} className={isRefreshing ? 'spin' : ''} />
           {t('refresh')}
         </button>
       </div>
@@ -101,7 +101,7 @@ export default function Network({ showToast }: NetworkProps) {
             </div>
             <div className="card-status">
               <span className="card-status-dot" />
-            {t('online')}
+              {t('online')}
             </div>
           </div>
           <div className="card-title">{t('network_dns_flush')}</div>

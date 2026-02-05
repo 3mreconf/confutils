@@ -3,11 +3,8 @@ import {
   Cpu,
   HardDrive,
   MemoryStick,
-  Thermometer,
   Activity,
   Wifi,
-  ArrowUp,
-  ArrowDown,
   Clock,
   Layers
 } from 'lucide-react';
@@ -135,7 +132,7 @@ const ResourceCard = ({
   color,
   details
 }: {
-  icon: React.ComponentType<{ size?: number }>;
+  icon: any;
   title: string;
   value: number;
   unit: string;
@@ -231,7 +228,7 @@ const ProcessItem = ({
   );
 };
 
-export default function SystemMonitor({ showToast }: SystemMonitorProps) {
+export default function SystemMonitor({ showToast: _showToast }: SystemMonitorProps) {
   const { t } = useI18n();
   const [cpuHistory, setCpuHistory] = useState<number[]>(Array(60).fill(30));
   const [memHistory, setMemHistory] = useState<number[]>(Array(60).fill(55));
@@ -318,7 +315,7 @@ export default function SystemMonitor({ showToast }: SystemMonitorProps) {
             className="control-card"
             style={{ padding: 'var(--space-md)', display: 'flex', alignItems: 'center', gap: 'var(--space-md)' }}
           >
-            <stat.icon size={18} style={{ color: 'var(--text-50)' }} />
+            <stat.icon size={18} color="var(--text-50)" />
             <div>
               <div className="text-muted" style={{ fontSize: 'var(--text-xs)' }}>{stat.label}</div>
               <div className="font-mono" style={{ color: 'var(--text-100)' }}>{stat.value}</div>

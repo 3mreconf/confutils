@@ -49,7 +49,7 @@ type Tweak = {
   titleKey: string;
   descKey: string;
   category: 'essential' | 'caution' | 'customize';
-  icon: React.ComponentType<{ size?: number }>;
+  icon: any;
   registry?: RegistryItem[];
   invokeScript?: string[];
   undoScript?: string[];

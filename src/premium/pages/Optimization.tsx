@@ -12,7 +12,6 @@ import {
   CheckCircle,
   Clock,
   AlertTriangle,
-  ChevronRight,
   RefreshCw
 } from 'lucide-react';
 import { useI18n } from '../../i18n/I18nContext';
@@ -25,7 +24,7 @@ interface OptimizationTask {
   id: string;
   title: string;
   description: string;
-  icon: React.ComponentType<{ size?: number }>;
+  icon: any;
   status: 'pending' | 'running' | 'completed' | 'skipped';
   impact: 'low' | 'medium' | 'high';
   category: 'performance' | 'startup' | 'visual' | 'gaming';
@@ -201,16 +200,14 @@ const TaskCard = ({
         <div className="flex items-center gap-sm">
           <StatusIcon
             size={14}
-            style={{
-              color: task.status === 'completed' ? 'var(--success)' :
-                     task.status === 'running' ? 'var(--cyan)' : 'var(--text-50)'
-            }}
+            color={task.status === 'completed' ? 'var(--success)' :
+              task.status === 'running' ? 'var(--cyan)' : 'var(--text-50)'}
             className={task.status === 'running' ? 'spin' : ''}
           />
           <span className="text-muted" style={{ fontSize: 'var(--text-xs)', textTransform: 'capitalize' }}>
             {task.status === 'pending' ? t('status_pending') :
-             task.status === 'running' ? t('status_running') :
-             task.status === 'completed' ? t('status_completed') : t('status_skipped')}
+              task.status === 'running' ? t('status_running') :
+                task.status === 'completed' ? t('status_completed') : t('status_skipped')}
           </span>
         </div>
         <button
@@ -392,7 +389,7 @@ export default function Optimization({ showToast }: OptimizationProps) {
               onClick={() => selectProfile(profile.id)}
             >
               <div className="flex items-center gap-md mb-md">
-                <profile.icon size={24} style={{ color: profile.color }} />
+                <profile.icon size={24} color={profile.color} />
                 <span style={{ fontWeight: 600, color: 'var(--text-100)' }}>{profile.name}</span>
               </div>
               <p className="text-muted" style={{ fontSize: 'var(--text-sm)', textAlign: 'left' }}>

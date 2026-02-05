@@ -14,7 +14,6 @@ import {
   Gamepad2,
   MessageSquare,
   Folder,
-  ExternalLink,
   RefreshCw,
   Check,
   X
@@ -29,7 +28,7 @@ interface App {
   id: string;
   name: string;
   description: string;
-  icon: React.ComponentType<{ size?: number }>;
+  icon: any;
   category: string;
   version: string;
   size: string;
@@ -86,12 +85,10 @@ const buildApps = (t: (key: any) => string): App[] => ([
 
 const AppCard = ({
   app,
-  onToggle,
-  onInstall
+  onToggle
 }: {
   app: App;
   onToggle: () => void;
-  onInstall: () => void;
 }) => {
   const Icon = app.icon;
 
@@ -128,7 +125,7 @@ const AppCard = ({
           <div className="flex items-center gap-sm">
             <span style={{ fontWeight: 600, color: 'var(--text-100)' }}>{app.name}</span>
             {app.installed && (
-              <CheckCircle size={14} style={{ color: 'var(--success)' }} />
+              <CheckCircle size={14} color="var(--success)" />
             )}
           </div>
           <p className="text-muted" style={{ fontSize: 'var(--text-xs)', marginTop: '2px' }}>
@@ -153,7 +150,7 @@ const AppCard = ({
             flexShrink: 0
           }}
         >
-          {app.selected && <Check size={14} style={{ color: 'var(--deep)' }} />}
+          {app.selected && <Check size={14} color="var(--deep)" />}
         </div>
       </div>
     </div>
@@ -185,7 +182,7 @@ export default function Installer({ showToast }: InstallerProps) {
   const filteredApps = useMemo(() => {
     return apps.filter(app => {
       const matchesSearch = app.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                           app.description.toLowerCase().includes(searchQuery.toLowerCase());
+        app.description.toLowerCase().includes(searchQuery.toLowerCase());
       const matchesCategory = activeCategory === 'all' || app.category === activeCategory;
       return matchesSearch && matchesCategory;
     });
@@ -219,7 +216,7 @@ export default function Installer({ showToast }: InstallerProps) {
     }
 
     setIsInstalling(true);
-    showToast('info', t('installer_installing'), `${t('installer_installing_prefix')} ${selectedCount} ${t('installer_apps') }...`);
+    showToast('info', t('installer_installing'), `${t('installer_installing_prefix')} ${selectedCount} ${t('installer_apps')}...`);
 
     for (const app of selectedApps) {
       await new Promise(resolve => setTimeout(resolve, 1000 + Math.random() * 500));
@@ -295,7 +292,6 @@ export default function Installer({ showToast }: InstallerProps) {
                 key={app.id}
                 app={app}
                 onToggle={() => toggleApp(app.id)}
-                onInstall={() => {}}
               />
             ))}
           </div>
@@ -345,7 +341,7 @@ export default function Installer({ showToast }: InstallerProps) {
                     }}
                   >
                     <div className="flex items-center gap-sm">
-                      <app.icon size={16} style={{ color: 'var(--cyan)' }} />
+                      <app.icon size={16} color="var(--cyan)" />
                       <span style={{ fontSize: 'var(--text-sm)', color: 'var(--text-90)' }}>
                         {app.name}
                       </span>

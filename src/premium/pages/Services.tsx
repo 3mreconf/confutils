@@ -5,17 +5,14 @@ import {
   Square,
   RotateCcw,
   Search,
-  Filter,
   ChevronDown,
   AlertCircle,
   CheckCircle,
   Clock,
-  Zap,
   Shield,
   Database,
   Wifi,
-  Monitor,
-  Settings
+  Monitor
 } from 'lucide-react';
 import { useI18n } from '../../i18n/I18nContext';
 
@@ -157,7 +154,7 @@ const buildServices = (t: (key: any) => string): Service[] => ([
   },
 ]);
 
-const categoryIcons: Record<string, React.ComponentType<{ size?: number }>> = {
+const categoryIcons: Record<string, any> = {
   system: Monitor,
   network: Wifi,
   security: Shield,
@@ -222,7 +219,7 @@ const ServiceRow = ({
 
       <div style={{ width: 100 }}>
         <div className="flex items-center gap-sm">
-          <CategoryIcon size={14} style={{ color: 'var(--text-50)' }} />
+          <CategoryIcon size={14} color="var(--text-50)" />
           <span className="text-muted" style={{ fontSize: 'var(--text-xs)', textTransform: 'capitalize' }}>
             {categoryLabels[service.category]}
           </span>
@@ -342,7 +339,7 @@ export default function Services({ showToast }: ServicesProps) {
   const filteredServices = useMemo(() => {
     return services.filter(service => {
       const matchesSearch = service.displayName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                           service.description.toLowerCase().includes(searchQuery.toLowerCase());
+        service.description.toLowerCase().includes(searchQuery.toLowerCase());
       const matchesStatus = statusFilter === 'all' || service.status === statusFilter;
       const matchesCategory = categoryFilter === 'all' || service.category === categoryFilter;
       return matchesSearch && matchesStatus && matchesCategory;
@@ -417,7 +414,7 @@ export default function Services({ showToast }: ServicesProps) {
                   {stat.value}
                 </div>
               </div>
-              <stat.icon size={24} style={{ color: stat.color, opacity: 0.5 }} />
+              <stat.icon size={24} color={stat.color} className="opacity-50" />
             </div>
           </div>
         ))}

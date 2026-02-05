@@ -120,7 +120,7 @@ const QuickActionCard = ({
   variant = 'cyan',
   lastRunLabel
 }: {
-  icon: React.ComponentType<{ size?: number }>;
+  icon: any;
   title: string;
   description: string;
   status?: { text: string; type: 'success' | 'warning' | 'error' | 'info' };
@@ -162,7 +162,7 @@ const StatCard = ({
   change,
   color = 'var(--cyan)'
 }: {
-  icon: React.ComponentType<{ size?: number }>;
+  icon: any;
   label: string;
   value: number | string;
   unit?: string;
@@ -175,7 +175,7 @@ const StatCard = ({
   >
     <div className="flex items-center justify-between mb-md">
       <span className="stat-label">{label}</span>
-      <Icon size={18} style={{ color, opacity: 0.7 }} />
+      <Icon size={18} color={color} className="opacity-70" />
     </div>
     <div className="stat-value">
       {typeof value === 'number' ? Math.round(value) : value}
@@ -248,7 +248,7 @@ export default function Dashboard({ showToast, onNavigate }: DashboardProps) {
           onClick={handleRefresh}
           disabled={isRefreshing}
         >
-          <RefreshCw size={16} className={isRefreshing ? 'spin' : ''} style={{ animation: isRefreshing ? 'spin 1s linear infinite' : 'none' }} />
+          <RefreshCw size={16} className={isRefreshing ? 'spin' : ''} />
           {t('dashboard_refresh')}
         </button>
       </div>
@@ -311,7 +311,7 @@ export default function Dashboard({ showToast, onNavigate }: DashboardProps) {
         }}>
           <ProgressRing
             value={stats.cpu}
-          label={t('cpu_label')}
+            label={t('cpu_label')}
             color={stats.cpu > 80 ? 'var(--danger)' : stats.cpu > 60 ? 'var(--warning)' : 'var(--cyan)'}
           />
           <ProgressRing
@@ -321,7 +321,7 @@ export default function Dashboard({ showToast, onNavigate }: DashboardProps) {
           />
           <ProgressRing
             value={stats.disk}
-          label={t('disk_label')}
+            label={t('disk_label')}
             color="var(--cyan)"
           />
           <div className="flex flex-col items-center gap-md">

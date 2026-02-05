@@ -9,9 +9,7 @@ import {
   Activity,
   FileText,
   Search,
-  ChevronRight,
   AlertTriangle,
-  CheckCircle,
   Lock
 } from 'lucide-react';
 import { useI18n } from '../../i18n/I18nContext';
@@ -24,7 +22,7 @@ interface PrivacySetting {
   id: string;
   title: string;
   description: string;
-  icon: React.ComponentType<{ size?: number }>;
+  icon: any;
   enabled: boolean;
   risk: 'low' | 'medium' | 'high';
   category: string;
@@ -238,8 +236,6 @@ export default function Privacy({ showToast }: PrivacyProps) {
     return true;
   });
 
-  const categories = ['data', 'sensors', 'features'];
-
   return (
     <div>
       {/* Header */}
@@ -324,8 +320,8 @@ export default function Privacy({ showToast }: PrivacyProps) {
               {enabledCount >= 6
                 ? t('privacy_score_excellent')
                 : enabledCount >= 3
-                ? t('privacy_score_good')
-                : t('privacy_score_attention')}
+                  ? t('privacy_score_good')
+                  : t('privacy_score_attention')}
             </p>
           </div>
 

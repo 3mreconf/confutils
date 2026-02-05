@@ -58,7 +58,7 @@ export default function Backup({ showToast }: BackupProps) {
         <div className="stat-card">
           <div className="flex items-center justify-between mb-md">
             <span className="stat-label">{t('backup_last')}</span>
-            <Clock size={18} style={{ color: 'var(--cyan)', opacity: 0.7 }} />
+            <Clock size={18} color="var(--cyan)" className="opacity-70" />
           </div>
           <div className="stat-value">2h<span className="stat-unit"> {t('ago')}</span></div>
           <div className="stat-change positive">
@@ -68,7 +68,7 @@ export default function Backup({ showToast }: BackupProps) {
         <div className="stat-card">
           <div className="flex items-center justify-between mb-md">
             <span className="stat-label">{t('backup_local_storage')}</span>
-            <HardDrive size={18} style={{ color: 'var(--amber)', opacity: 0.7 }} />
+            <HardDrive size={18} color="var(--amber)" className="opacity-70" />
           </div>
           <div className="stat-value">64<span className="stat-unit">%</span></div>
           <div className="stat-change negative">
@@ -78,7 +78,7 @@ export default function Backup({ showToast }: BackupProps) {
         <div className="stat-card">
           <div className="flex items-center justify-between mb-md">
             <span className="stat-label">{t('backup_cloud_sync')}</span>
-            <Cloud size={18} style={{ color: 'var(--success)', opacity: 0.7 }} />
+            <Cloud size={18} color="var(--success)" className="opacity-70" />
           </div>
           <div className="stat-value">{t('active')}</div>
           <div className="stat-change positive">
@@ -88,7 +88,7 @@ export default function Backup({ showToast }: BackupProps) {
         <div className="stat-card">
           <div className="flex items-center justify-between mb-md">
             <span className="stat-label">{t('backup_retention')}</span>
-            <Database size={18} style={{ color: 'var(--cyan)', opacity: 0.7 }} />
+            <Database size={18} color="var(--cyan)" className="opacity-70" />
           </div>
           <div className="stat-value">14<span className="stat-unit"> {t('days')}</span></div>
           <div className="stat-change positive">

@@ -2,7 +2,6 @@ import { useState, useMemo, useEffect } from 'react';
 import {
   Trash2,
   Search,
-  Package,
   AlertTriangle,
   CheckCircle,
   Shield,
@@ -33,7 +32,7 @@ interface BloatApp {
   name: string;
   packageName: string;
   description: string;
-  icon: React.ComponentType<{ size?: number }>;
+  icon: any;
   size: string;
   risk: 'safe' | 'moderate' | 'caution';
   category: string;
@@ -198,7 +197,7 @@ const BloatCard = ({
             background: app.selected ? 'var(--danger)' : 'transparent'
           }}
         >
-          {app.selected && <Trash2 size={12} style={{ color: 'white' }} />}
+          {app.selected && <Trash2 size={12} color="white" />}
         </div>
       </div>
     </div>
@@ -231,7 +230,7 @@ export default function Debloater({ showToast }: DebloaterProps) {
   const filteredApps = useMemo(() => {
     return apps.filter(app => {
       const matchesSearch = app.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                           app.description.toLowerCase().includes(searchQuery.toLowerCase());
+        app.description.toLowerCase().includes(searchQuery.toLowerCase());
       const matchesCategory = activeCategory === 'all' || app.category === activeCategory;
       return matchesSearch && matchesCategory && !app.removed;
     });
@@ -299,7 +298,7 @@ export default function Debloater({ showToast }: DebloaterProps) {
         <div className="modal-overlay">
           <div className="modal" style={{ maxWidth: 420 }}>
             <div className="modal-header">
-              <AlertTriangle size={24} style={{ color: 'var(--warning)' }} />
+              <AlertTriangle size={24} color="var(--warning)" />
               <h3 className="modal-title">{t('debloater_confirm_title')}</h3>
               <button className="modal-close" onClick={() => setShowWarning(false)}>
                 <X size={18} />
@@ -438,7 +437,7 @@ export default function Debloater({ showToast }: DebloaterProps) {
 
           {filteredApps.length === 0 && (
             <div className="empty-state">
-              <CheckCircle className="empty-state-icon" style={{ color: 'var(--success)' }} />
+              <CheckCircle className="empty-state-icon" color="var(--success)" />
               <h3 className="empty-state-title">{t('debloater_empty_title')}</h3>
               <p className="empty-state-description">
                 {t('debloater_empty_desc')}
@@ -463,7 +462,7 @@ export default function Debloater({ showToast }: DebloaterProps) {
 
           {selectedCount === 0 ? (
             <div style={{ textAlign: 'center', padding: 'var(--space-xl) 0' }}>
-              <Trash2 size={48} style={{ color: 'var(--text-30)', marginBottom: 'var(--space-md)' }} />
+              <Trash2 size={48} color="var(--text-30)" style={{ marginBottom: 'var(--space-md)' }} />
               <p className="text-muted" style={{ fontSize: 'var(--text-sm)' }}>
                 {t('debloater_queue_empty')}
               </p>
@@ -481,7 +480,7 @@ export default function Debloater({ showToast }: DebloaterProps) {
                     }}
                   >
                     <div className="flex items-center gap-sm">
-                      <app.icon size={14} style={{ color: 'var(--text-50)' }} />
+                      <app.icon size={14} color="var(--text-50)" />
                       <span style={{ fontSize: 'var(--text-sm)', color: 'var(--text-90)' }}>
                         {app.name}
                       </span>
