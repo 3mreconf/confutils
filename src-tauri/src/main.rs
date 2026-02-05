@@ -1,14 +1,14 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-mod commands;
 mod anti_debug;
+mod commands;
 mod hwid;
 mod security;
 
-use tauri::Manager;
+use obfstr::obfstr;
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{TrayIconBuilder, TrayIconEvent};
-use obfstr::obfstr;
+use tauri::Manager;
 
 fn main() {
     if anti_debug::is_being_debugged() {
@@ -27,18 +27,29 @@ fn main() {
             }
         }))
         .setup(|app| {
-            std::thread::spawn(|| {
-                loop {
-                    if anti_debug::is_being_debugged() {
-                        std::process::exit(0);
-                    }
-                    std::thread::sleep(std::time::Duration::from_secs(60));
+            std::thread::spawn(|| loop {
+                if anti_debug::is_being_debugged() {
+                    std::process::exit(0);
                 }
+                std::thread::sleep(std::time::Duration::from_secs(60));
             });
 
-            let show_i = MenuItem::with_id(app, obfstr!("show"), obfstr!("Show ConfUtils"), true, None::<&str>)?;
-            let hide_i = MenuItem::with_id(app, obfstr!("hide"), obfstr!("Hide to Tray"), true, None::<&str>)?;
-            let quit_i = MenuItem::with_id(app, obfstr!("quit"), obfstr!("Quit"), true, None::<&str>)?;
+            let show_i = MenuItem::with_id(
+                app,
+                obfstr!("show"),
+                obfstr!("Show ConfUtils"),
+                true,
+                None::<&str>,
+            )?;
+            let hide_i = MenuItem::with_id(
+                app,
+                obfstr!("hide"),
+                obfstr!("Hide to Tray"),
+                true,
+                None::<&str>,
+            )?;
+            let quit_i =
+                MenuItem::with_id(app, obfstr!("quit"), obfstr!("Quit"), true, None::<&str>)?;
 
             let menu = Menu::with_items(app, &[&show_i, &hide_i, &quit_i])?;
 
@@ -56,24 +67,22 @@ fn main() {
                         }
                     }
                 })
-                .on_menu_event(|app, event| {
-                    match event.id.as_ref() {
-                        "show" => {
-                            if let Some(window) = app.get_webview_window(obfstr!("main")) {
-                                let _ = window.show();
-                                let _ = window.set_focus();
-                            }
+                .on_menu_event(|app, event| match event.id.as_ref() {
+                    "show" => {
+                        if let Some(window) = app.get_webview_window(obfstr!("main")) {
+                            let _ = window.show();
+                            let _ = window.set_focus();
                         }
-                        "hide" => {
-                            if let Some(window) = app.get_webview_window(obfstr!("main")) {
-                                let _ = window.hide();
-                            }
-                        }
-                        "quit" => {
-                            std::process::exit(0);
-                        }
-                        _ => {}
                     }
+                    "hide" => {
+                        if let Some(window) = app.get_webview_window(obfstr!("main")) {
+                            let _ = window.hide();
+                        }
+                    }
+                    "quit" => {
+                        std::process::exit(0);
+                    }
+                    _ => {}
                 })
                 .build(app)?;
 
@@ -90,7 +99,10 @@ fn main() {
             commands::set_service_startup_type,
             commands::restart_service,
             commands::read_registry,
+            commands::get_registry_type,
             commands::write_registry,
+            commands::delete_registry_value,
+            commands::delete_registry_key,
             commands::get_system_info,
             commands::get_disk_usage,
             commands::check_windows_updates,

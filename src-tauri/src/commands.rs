@@ -1,8 +1,8 @@
 use std::process::Command;
+use std::sync::atomic::{AtomicBool, Ordering};
+use tauri::Emitter;
 use winreg::enums::*;
 use winreg::RegKey;
-use tauri::Emitter;
-use std::sync::atomic::{AtomicBool, Ordering};
 
 #[cfg(windows)]
 use std::os::windows::process::CommandExt;
@@ -27,8 +27,8 @@ fn hosts_blocklist_domains(list_type: &str) -> Result<(&'static str, Vec<&'stati
                 "ads.microsoft.com",
                 "adnxs.com",
                 "adsymptotic.com",
-                "adsystem.com"
-            ]
+                "adsystem.com",
+            ],
         )),
         "telemetry" => Ok((
             "TELEMETRY",
@@ -42,10 +42,10 @@ fn hosts_blocklist_domains(list_type: &str) -> Result<(&'static str, Vec<&'stati
                 "sqm.telemetry.microsoft.com",
                 "telecommand.telemetry.microsoft.com",
                 "telecommand.telemetry.microsoft.com.nsatc.net",
-                "wes.df.telemetry.microsoft.com"
-            ]
+                "wes.df.telemetry.microsoft.com",
+            ],
         )),
-        _ => Err("Gecersiz blok listesi".to_string())
+        _ => Err("Gecersiz blok listesi".to_string()),
     }
 }
 
@@ -60,7 +60,7 @@ fn privacy_firewall_domains() -> Vec<&'static str> {
         "sqm.telemetry.microsoft.com",
         "telecommand.telemetry.microsoft.com",
         "telecommand.telemetry.microsoft.com.nsatc.net",
-        "wes.df.telemetry.microsoft.com"
+        "wes.df.telemetry.microsoft.com",
     ]
 }
 
@@ -114,7 +114,10 @@ async fn resolve_discord_auth(
                 }
 
                 let status = r.status();
-                let error_text = r.text().await.unwrap_or_else(|_| "Bilinmeyen hata".to_string());
+                let error_text = r
+                    .text()
+                    .await
+                    .unwrap_or_else(|_| "Bilinmeyen hata".to_string());
                 return Err(format!(
                     "Kullanıcı bilgisi alınamadı (Status {}): {}",
                     status, error_text
@@ -122,10 +125,15 @@ async fn resolve_discord_auth(
             }
             Err(e) => {
                 if e.is_timeout() {
-                    return Err("Discord API yanıt vermiyor (timeout). Lütfen tekrar deneyin.".to_string());
+                    return Err(
+                        "Discord API yanıt vermiyor (timeout). Lütfen tekrar deneyin.".to_string(),
+                    );
                 }
                 if e.is_connect() {
-                    return Err("Discord API'ye bağlanılamıyor. İnternet bağlantınızı kontrol edin.".to_string());
+                    return Err(
+                        "Discord API'ye bağlanılamıyor. İnternet bağlantınızı kontrol edin."
+                            .to_string(),
+                    );
                 }
                 return Err(format!("İstek başarısız: {}", e));
             }
@@ -135,13 +143,17 @@ async fn resolve_discord_auth(
     Err("Token geçersiz veya süresi dolmuş. Lütfen geçerli bir token girin.".to_string())
 }
 
-async fn run_powershell_internal(command: String, skip_rate_limit: bool, skip_security_check: bool) -> Result<String, String> {
+async fn run_powershell_internal(
+    command: String,
+    skip_rate_limit: bool,
+    skip_security_check: bool,
+) -> Result<String, String> {
     let sanitized = if skip_security_check {
         command.clone()
     } else {
         sanitize_powershell_input(&command)?
     };
-    
+
     if !skip_rate_limit {
         check_rate_limit("powershell_command", 10, 60)?;
     }
@@ -169,21 +181,29 @@ async fn run_powershell_internal(command: String, skip_rate_limit: bool, skip_se
     } else {
         let stdout = String::from_utf8_lossy(&output.stdout).to_string();
         let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-        let raw_error = if stderr.trim().is_empty() { stdout } else { stderr };
+        let raw_error = if stderr.trim().is_empty() {
+            stdout
+        } else {
+            stderr
+        };
         let cleaned = raw_error
             .lines()
             .filter(|line| {
                 let trimmed = line.trim_start();
-                !(trimmed.starts_with("At line:") ||
-                  trimmed.starts_with("+") ||
-                  trimmed.starts_with("CategoryInfo") ||
-                  trimmed.starts_with("FullyQualifiedErrorId"))
+                !(trimmed.starts_with("At line:")
+                    || trimmed.starts_with("+")
+                    || trimmed.starts_with("CategoryInfo")
+                    || trimmed.starts_with("FullyQualifiedErrorId"))
             })
             .collect::<Vec<_>>()
             .join("\n")
             .trim()
             .to_string();
-        let error = if cleaned.is_empty() { raw_error.trim().to_string() } else { cleaned };
+        let error = if cleaned.is_empty() {
+            raw_error.trim().to_string()
+        } else {
+            cleaned
+        };
         if error.contains("Access is denied") || error.contains("UnauthorizedAccessException") {
             Err(format!("Yonetici izni gerekli. Hata: {}", error))
         } else {
@@ -209,9 +229,9 @@ async fn run_powershell_no_rate_limit_no_security(command: String) -> Result<Str
 #[tauri::command]
 pub async fn start_service(service_name: String) -> Result<String, String> {
     check_auth()?;
-    
+
     let validated_name = validate_service_name(&service_name)?;
-    
+
     let command = format!(
         r#"
         try {{
@@ -229,9 +249,9 @@ pub async fn start_service(service_name: String) -> Result<String, String> {
 #[tauri::command]
 pub async fn stop_service(service_name: String) -> Result<String, String> {
     check_auth()?;
-    
+
     let validated_name = validate_service_name(&service_name)?;
-    
+
     let command = format!(
         r#"
         try {{
@@ -249,9 +269,9 @@ pub async fn stop_service(service_name: String) -> Result<String, String> {
 #[tauri::command]
 pub async fn get_service_status(service_name: String) -> Result<String, String> {
     check_auth()?;
-    
+
     let validated_name = validate_service_name(&service_name)?;
-    
+
     let command = format!(
         r#"
         try {{
@@ -269,7 +289,7 @@ pub async fn get_service_status(service_name: String) -> Result<String, String> 
 #[tauri::command]
 pub async fn list_services() -> Result<String, String> {
     check_auth()?;
-    
+
     let command = r#"
         [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
         $OutputEncoding = [System.Text.Encoding]::UTF8
@@ -287,7 +307,7 @@ pub async fn list_services() -> Result<String, String> {
         }
     "#;
     let result = run_powershell_no_rate_limit(command.to_string()).await?;
-    
+
     if result.trim().is_empty() || result.trim() == "null" {
         Ok("[]".to_string())
     } else {
@@ -307,9 +327,9 @@ pub async fn list_services() -> Result<String, String> {
 #[tauri::command]
 pub async fn get_service_details(service_name: String) -> Result<String, String> {
     check_auth()?;
-    
+
     let validated_name = validate_service_name(&service_name)?;
-    
+
     let command = format!(
         r#"
         [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
@@ -356,16 +376,21 @@ pub async fn get_service_details(service_name: String) -> Result<String, String>
 }
 
 #[tauri::command]
-pub async fn set_service_startup_type(service_name: String, startup_type: String) -> Result<String, String> {
+pub async fn set_service_startup_type(
+    service_name: String,
+    startup_type: String,
+) -> Result<String, String> {
     check_auth()?;
-    
+
     let validated_name = validate_service_name(&service_name)?;
-    
+
     let valid_types = ["Automatic", "Manual", "Disabled"];
     if !valid_types.contains(&startup_type.as_str()) {
-        return Err("Geçersiz başlangıç türü. Automatic, Manual veya Disabled olmalıdır".to_string());
+        return Err(
+            "Geçersiz başlangıç türü. Automatic, Manual veya Disabled olmalıdır".to_string(),
+        );
     }
-    
+
     let command = format!(
         r#"
         try {{
@@ -383,9 +408,9 @@ pub async fn set_service_startup_type(service_name: String, startup_type: String
 #[tauri::command]
 pub async fn restart_service(service_name: String) -> Result<String, String> {
     check_auth()?;
-    
+
     let validated_name = validate_service_name(&service_name)?;
-    
+
     let command = format!(
         r#"
         try {{
@@ -404,31 +429,97 @@ pub async fn restart_service(service_name: String) -> Result<String, String> {
 pub async fn read_registry(hive: String, path: String, name: String) -> Result<String, String> {
     check_auth()?;
     let _validated_path = validate_registry_path(&format!("{}:{}", hive, path))?;
-    
+
     let reg_path = format!("{}:\\{}", hive, path);
-    let command = format!(r#"Get-ItemProperty -Path "{}" -Name "{}" -ErrorAction SilentlyContinue | Select-Object -ExpandProperty "{}""#, reg_path, name, name);
+    // Use Get-ItemPropertyValue for cleaner output if possible, or handle nulls
+    let command = format!(
+        r#"
+        $val = Get-ItemProperty -Path "{}" -Name "{}" -ErrorAction SilentlyContinue
+        if ($val -and $val."{}") {{
+            $val."{}"
+        }} else {{
+            ""
+        }}
+    "#,
+        reg_path, name, name, name
+    );
     let result = run_powershell_internal(command, false, false).await?;
     Ok(result.trim().to_string())
 }
 
 #[tauri::command]
-pub async fn write_registry(hive: String, path: String, name: String, value: String) -> Result<String, String> {
+pub async fn get_registry_type(hive: String, path: String, name: String) -> Result<String, String> {
+    check_auth()?;
+    let _validated_path = validate_registry_path(&format!("{}:{}", hive, path))?;
+    let reg_path = format!("{}:\\{}", hive, path);
+    let command = format!(
+        r#"(Get-ItemProperty -Path "{}" -Name "{}" -ErrorAction SilentlyContinue).PSObject.Properties["{}"].TypeNameOfValue"#,
+        reg_path, name, name
+    );
+    let result = run_powershell_internal(command, false, false).await?;
+    Ok(result.trim().to_string())
+}
+
+#[tauri::command]
+pub async fn write_registry(
+    hive: String,
+    path: String,
+    name: String,
+    value: String,
+    value_type: Option<String>,
+) -> Result<String, String> {
     check_auth()?;
     let _validated_path = validate_registry_path(&format!("{}:{}", hive, path))?;
     if value.len() > 10000 {
         return Err("Registry değeri çok uzun (max 10000 karakter)".to_string());
     }
-    
+
     let reg_path = format!("{}:\\{}", hive, path);
     let escaped_value = value.replace('"', "`\"");
-    let command = format!(r#"New-Item -Path "{}" -Force | Out-Null; Set-ItemProperty -Path "{}" -Name "{}" -Value "{}"; "Registry value written successfully""#, reg_path, reg_path, name, escaped_value);
+    let type_str = value_type.unwrap_or_else(|| "String".to_string());
+
+    let command = format!(
+        r#"if (-not (Test-Path "{path}")) {{ New-Item -Path "{path}" -Force | Out-Null }}; Set-ItemProperty -Path "{path}" -Name "{name}" -Value "{value}" -Type {reg_type} -Force; "Registry value written successfully""#,
+        path = reg_path,
+        name = name,
+        value = escaped_value,
+        reg_type = type_str
+    );
+    run_powershell_internal(command, false, false).await
+}
+
+#[tauri::command]
+pub async fn delete_registry_value(
+    hive: String,
+    path: String,
+    name: String,
+) -> Result<String, String> {
+    check_auth()?;
+    let _validated_path = validate_registry_path(&format!("{}:{}", hive, path))?;
+    let reg_path = format!("{}:\\{}", hive, path);
+    let command = format!(
+        r#"Remove-ItemProperty -Path "{}" -Name "{}" -Force -ErrorAction SilentlyContinue; "Registry value deleted""#,
+        reg_path, name
+    );
+    run_powershell_internal(command, false, false).await
+}
+
+#[tauri::command]
+pub async fn delete_registry_key(hive: String, path: String) -> Result<String, String> {
+    check_auth()?;
+    let _validated_path = validate_registry_path(&format!("{}:{}", hive, path))?;
+    let reg_path = format!("{}:\\{}", hive, path);
+    let command = format!(
+        r#"Remove-Item -Path "{}" -Recurse -Force -ErrorAction SilentlyContinue; "Registry key deleted""#,
+        reg_path
+    );
     run_powershell_internal(command, false, false).await
 }
 
 #[tauri::command]
 pub async fn get_system_info() -> Result<String, String> {
     check_auth()?;
-    
+
     let command = r#"
         $os = Get-CimInstance Win32_OperatingSystem
         $cs = Get-CimInstance Win32_ComputerSystem
@@ -445,7 +536,7 @@ pub async fn get_system_info() -> Result<String, String> {
 #[tauri::command]
 pub async fn get_disk_usage() -> Result<String, String> {
     check_auth()?;
-    
+
     let command = r#"
         Get-CimInstance Win32_LogicalDisk | Where-Object {$_.DriveType -eq 3} | 
         Select-Object DeviceID, 
@@ -461,7 +552,7 @@ pub async fn get_disk_usage() -> Result<String, String> {
 #[tauri::command]
 pub async fn check_windows_updates() -> Result<String, String> {
     check_auth()?;
-    
+
     let command = r#"
         try {
             $updateSession = New-Object -ComObject Microsoft.Update.Session
@@ -478,7 +569,7 @@ pub async fn check_windows_updates() -> Result<String, String> {
 #[tauri::command]
 pub async fn clear_temp_files() -> Result<String, String> {
     check_auth()?;
-    
+
     let command = r#"
         $temp = $env:TEMP
         $tempFiles = Get-ChildItem -Path $temp -Recurse -ErrorAction SilentlyContinue | Measure-Object -Property Length -Sum
@@ -491,7 +582,7 @@ pub async fn clear_temp_files() -> Result<String, String> {
 #[tauri::command]
 pub async fn disable_telemetry() -> Result<String, String> {
     check_auth()?;
-    
+
     let command = r#"
         New-Item -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\DataCollection" -Force | Out-Null
         Set-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\DataCollection" -Name "AllowTelemetry" -Value 0 -Type DWord -Force
@@ -503,7 +594,7 @@ pub async fn disable_telemetry() -> Result<String, String> {
 #[tauri::command]
 pub async fn get_defender_status() -> Result<String, String> {
     check_auth()?;
-    
+
     let command = r#"
         try {
             $defender = Get-MpComputerStatus
@@ -523,7 +614,7 @@ pub async fn get_defender_status() -> Result<String, String> {
 #[tauri::command]
 pub async fn list_startup_programs() -> Result<String, String> {
     check_auth()?;
-    
+
     let command = r#"
         $startup = Get-CimInstance Win32_StartupCommand
         $startup | Select-Object Name, Command, Location | ConvertTo-Json -Compress
@@ -532,21 +623,40 @@ pub async fn list_startup_programs() -> Result<String, String> {
 }
 
 #[tauri::command]
-pub async fn toggle_startup_program(name: String, location: String, command: String, enabled: bool) -> Result<String, String> {
+pub async fn toggle_startup_program(
+    name: String,
+    location: String,
+    command: String,
+    enabled: bool,
+) -> Result<String, String> {
     check_auth()?;
-    
-    let _reg_path = location.replace("HKCU:", "HKEY_CURRENT_USER").replace("HKLM:", "HKEY_LOCAL_MACHINE");
+
+    let _reg_path = location
+        .replace("HKCU:", "HKEY_CURRENT_USER")
+        .replace("HKLM:", "HKEY_LOCAL_MACHINE");
     let ps_command = if enabled {
-        format!(r#"Set-ItemProperty -Path "{}:\{}" -Name "{}" -Value "{}"; "Startup program enabled""#, 
-            if location.starts_with("HKCU") { "HKCU" } else { "HKLM" },
+        format!(
+            r#"Set-ItemProperty -Path "{}:\{}" -Name "{}" -Value "{}"; "Startup program enabled""#,
+            if location.starts_with("HKCU") {
+                "HKCU"
+            } else {
+                "HKLM"
+            },
             location.split(':').nth(1).unwrap_or(""),
             name,
-            command)
+            command
+        )
     } else {
-        format!(r#"Remove-ItemProperty -Path "{}:\{}" -Name "{}" -ErrorAction SilentlyContinue; "Startup program disabled""#,
-            if location.starts_with("HKCU") { "HKCU" } else { "HKLM" },
+        format!(
+            r#"Remove-ItemProperty -Path "{}:\{}" -Name "{}" -ErrorAction SilentlyContinue; "Startup program disabled""#,
+            if location.starts_with("HKCU") {
+                "HKCU"
+            } else {
+                "HKLM"
+            },
             location.split(':').nth(1).unwrap_or(""),
-            name)
+            name
+        )
     };
     run_powershell_internal(ps_command, false, false).await
 }
@@ -554,7 +664,7 @@ pub async fn toggle_startup_program(name: String, location: String, command: Str
 #[tauri::command]
 pub async fn list_network_adapters() -> Result<String, String> {
     check_auth()?;
-    
+
     let command = r#"
         try {
             [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
@@ -577,7 +687,7 @@ pub async fn list_network_adapters() -> Result<String, String> {
 #[tauri::command]
 pub async fn flush_dns_cache() -> Result<String, String> {
     check_auth()?;
-    
+
     let command = r#"
         [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
         $OutputEncoding = [System.Text.Encoding]::UTF8
@@ -600,7 +710,7 @@ pub async fn flush_dns_cache() -> Result<String, String> {
         }
     "#;
     let result = run_powershell_no_rate_limit(command.to_string()).await?;
-    
+
     if result.contains("successfully") || result.contains("başarıyla") {
         Ok(result)
     } else if result.contains("failed") || result.contains("hata") || result.contains("Error") {
@@ -613,7 +723,7 @@ pub async fn flush_dns_cache() -> Result<String, String> {
 #[tauri::command]
 pub async fn list_processes() -> Result<String, String> {
     check_auth()?;
-    
+
     let command = r#"
         Get-Process | Select-Object Id, ProcessName, @{Name="CPU";Expression={$_.CPU}}, @{Name="MemoryMB";Expression={[math]::Round($_.WorkingSet64/1MB,2)}} | ConvertTo-Json -Compress
     "#;
@@ -624,15 +734,18 @@ pub async fn list_processes() -> Result<String, String> {
 pub async fn kill_process(process_id: u32) -> Result<String, String> {
     check_auth()?;
     let validated_pid = validate_process_id(process_id)?;
-    
-    let command = format!(r#"Stop-Process -Id {} -Force; "Process killed successfully""#, validated_pid);
+
+    let command = format!(
+        r#"Stop-Process -Id {} -Force; "Process killed successfully""#,
+        validated_pid
+    );
     run_powershell_internal(command, false, false).await
 }
 
 #[tauri::command]
 pub async fn get_cpu_usage() -> Result<String, String> {
     check_auth()?;
-    
+
     let command = r#"
         try {
             $cpu = Get-WmiObject Win32_Processor | Measure-Object -property LoadPercentage -Average
@@ -654,7 +767,7 @@ pub async fn get_cpu_usage() -> Result<String, String> {
 #[tauri::command]
 pub async fn get_memory_usage() -> Result<String, String> {
     check_auth()?;
-    
+
     let command = r#"
         $mem = Get-CimInstance Win32_OperatingSystem
         $total = [math]::Round($mem.TotalVisibleMemorySize / 1MB, 2)
@@ -669,7 +782,7 @@ pub async fn get_memory_usage() -> Result<String, String> {
 #[tauri::command]
 pub async fn get_disk_info() -> Result<String, String> {
     check_auth()?;
-    
+
     let command = r#"
         Get-CimInstance Win32_LogicalDisk | Where-Object {$_.DriveType -eq 3} | 
         Select-Object DeviceID, 
@@ -685,7 +798,7 @@ pub async fn get_disk_info() -> Result<String, String> {
 #[tauri::command]
 pub async fn get_battery_status() -> Result<String, String> {
     check_auth()?;
-    
+
     let command = r#"
         $battery = Get-CimInstance Win32_Battery
         if ($battery) {
@@ -700,7 +813,7 @@ pub async fn get_battery_status() -> Result<String, String> {
 #[tauri::command]
 pub async fn get_network_stats() -> Result<String, String> {
     check_auth()?;
-    
+
     let command = r#"
         $net = Get-Counter "\Network Interface(*)\Bytes Total/sec"
         $net.CounterSamples | Where-Object {$_.InstanceName -notlike "*isatap*" -and $_.InstanceName -notlike "*Loopback*"} | 
@@ -712,7 +825,7 @@ pub async fn get_network_stats() -> Result<String, String> {
 #[tauri::command]
 pub async fn get_uptime() -> Result<String, String> {
     check_auth()?;
-    
+
     let command = r#"
         $uptime = (Get-Date) - (Get-CimInstance Win32_OperatingSystem).LastBootUpTime
         @{Days=$uptime.Days;Hours=$uptime.Hours;Minutes=$uptime.Minutes;TotalSeconds=$uptime.TotalSeconds} | ConvertTo-Json -Compress
@@ -723,7 +836,7 @@ pub async fn get_uptime() -> Result<String, String> {
 #[tauri::command]
 pub async fn get_detailed_specs() -> Result<String, String> {
     check_auth()?;
-    
+
     let command = r#"
         $cpu = Get-CimInstance Win32_Processor
         $ram = Get-CimInstance Win32_PhysicalMemory | Measure-Object -Property Capacity -Sum
@@ -736,7 +849,7 @@ pub async fn get_detailed_specs() -> Result<String, String> {
 #[tauri::command]
 pub async fn check_ssd_health() -> Result<String, String> {
     check_auth()?;
-    
+
     let command = r#"
         Get-PhysicalDisk | Select-Object DeviceID, MediaType, HealthStatus, OperationalStatus | ConvertTo-Json -Compress
     "#;
@@ -746,7 +859,7 @@ pub async fn check_ssd_health() -> Result<String, String> {
 #[tauri::command]
 pub async fn get_firewall_status() -> Result<String, String> {
     check_auth()?;
-    
+
     let command = r#"
         try {
             $fw = Get-NetFirewallProfile
@@ -765,7 +878,7 @@ pub async fn get_firewall_status() -> Result<String, String> {
 #[tauri::command]
 pub async fn get_last_update_time() -> Result<String, String> {
     check_auth()?;
-    
+
     let command = r#"
         (Get-CimInstance Win32_OperatingSystem).LastBootUpTime | ConvertTo-Json -Compress
     "#;
@@ -775,7 +888,7 @@ pub async fn get_last_update_time() -> Result<String, String> {
 #[tauri::command]
 pub async fn optimize_ssd() -> Result<String, String> {
     check_auth()?;
-    
+
     let command = r#"
         Optimize-Volume -DriveLetter C -ReTrim -ErrorAction SilentlyContinue
         "SSD optimized successfully"
@@ -786,7 +899,7 @@ pub async fn optimize_ssd() -> Result<String, String> {
 #[tauri::command]
 pub async fn rebuild_search_index() -> Result<String, String> {
     check_auth()?;
-    
+
     let command = r#"
         Get-Service -Name "WSearch" | Restart-Service
         "Search index rebuild initiated"
@@ -797,7 +910,7 @@ pub async fn rebuild_search_index() -> Result<String, String> {
 #[tauri::command]
 pub async fn run_disk_cleanup() -> Result<String, String> {
     check_auth()?;
-    
+
     let command = r#"
         cleanmgr /d C: /VERYLOWDISK | Out-Null
         "Disk cleanup completed"
@@ -808,34 +921,46 @@ pub async fn run_disk_cleanup() -> Result<String, String> {
 #[tauri::command]
 pub async fn toggle_location_services(enabled: bool) -> Result<String, String> {
     check_auth()?;
-    
+
     let value = if enabled { 1 } else { 0 };
-    let command = format!(r#"Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\location" -Name "Value" -Value {} -Type String -Force; "Location services {}""#, value, if enabled { "enabled" } else { "disabled" });
+    let command = format!(
+        r#"Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\location" -Name "Value" -Value {} -Type String -Force; "Location services {}""#,
+        value,
+        if enabled { "enabled" } else { "disabled" }
+    );
     run_powershell_internal(command, false, false).await
 }
 
 #[tauri::command]
 pub async fn toggle_microphone_access(enabled: bool) -> Result<String, String> {
     check_auth()?;
-    
+
     let value = if enabled { "Allow" } else { "Deny" };
-    let command = format!(r#"Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\microphone" -Name "Value" -Value "{}" -Type String -Force; "Microphone access {}""#, value, if enabled { "enabled" } else { "disabled" });
+    let command = format!(
+        r#"Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\microphone" -Name "Value" -Value "{}" -Type String -Force; "Microphone access {}""#,
+        value,
+        if enabled { "enabled" } else { "disabled" }
+    );
     run_powershell_internal(command, false, false).await
 }
 
 #[tauri::command]
 pub async fn toggle_camera_access(enabled: bool) -> Result<String, String> {
     check_auth()?;
-    
+
     let value = if enabled { "Allow" } else { "Deny" };
-    let command = format!(r#"Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\webcam" -Name "Value" -Value "{}" -Type String -Force; "Camera access {}""#, value, if enabled { "enabled" } else { "disabled" });
+    let command = format!(
+        r#"Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\webcam" -Name "Value" -Value "{}" -Type String -Force; "Camera access {}""#,
+        value,
+        if enabled { "enabled" } else { "disabled" }
+    );
     run_powershell_internal(command, false, false).await
 }
 
 #[tauri::command]
 pub async fn clear_activity_history() -> Result<String, String> {
     check_auth()?;
-    
+
     let command = r#"
         Remove-Item "$env:LOCALAPPDATA\ConnectedDevicesPlatform" -Recurse -Force -ErrorAction SilentlyContinue
         Remove-Item "$env:LOCALAPPDATA\Microsoft\Windows\ActivityHistory" -Recurse -Force -ErrorAction SilentlyContinue
@@ -845,53 +970,65 @@ pub async fn clear_activity_history() -> Result<String, String> {
 }
 
 #[tauri::command]
-pub async fn clear_browser_data(browser: String, _data_types: Vec<String>) -> Result<String, String> {
+pub async fn clear_browser_data(
+    browser: String,
+    _data_types: Vec<String>,
+) -> Result<String, String> {
     check_auth()?;
-    
+
     let browser_lower = browser.to_lowercase();
     let paths = match browser_lower.as_str() {
         "chrome" => vec![
             "$env:LOCALAPPDATA\\Google\\Chrome\\User Data\\Default\\Cache",
             "$env:LOCALAPPDATA\\Google\\Chrome\\User Data\\Default\\Cookies",
-            "$env:LOCALAPPDATA\\Google\\Chrome\\User Data\\Default\\History"
+            "$env:LOCALAPPDATA\\Google\\Chrome\\User Data\\Default\\History",
         ],
         "edge" => vec![
             "$env:LOCALAPPDATA\\Microsoft\\Edge\\User Data\\Default\\Cache",
             "$env:LOCALAPPDATA\\Microsoft\\Edge\\User Data\\Default\\Cookies",
-            "$env:LOCALAPPDATA\\Microsoft\\Edge\\User Data\\Default\\History"
+            "$env:LOCALAPPDATA\\Microsoft\\Edge\\User Data\\Default\\History",
         ],
         "firefox" => vec![
             "$env:APPDATA\\Mozilla\\Firefox\\Profiles\\*\\cache2",
-            "$env:APPDATA\\Mozilla\\Firefox\\Profiles\\*\\cookies.sqlite"
+            "$env:APPDATA\\Mozilla\\Firefox\\Profiles\\*\\cookies.sqlite",
         ],
-        _ => vec![]
+        _ => vec![],
     };
-    
+
     let mut cleanup_commands = Vec::new();
     for path in paths {
-        cleanup_commands.push(format!("Remove-Item -Path \"{}\" -Recurse -Force -ErrorAction SilentlyContinue", path));
+        cleanup_commands.push(format!(
+            "Remove-Item -Path \"{}\" -Recurse -Force -ErrorAction SilentlyContinue",
+            path
+        ));
     }
-    let command = format!("{}; \"Browser data cleared successfully\"", cleanup_commands.join("; "));
+    let command = format!(
+        "{}; \"Browser data cleared successfully\"",
+        cleanup_commands.join("; ")
+    );
     run_powershell_internal(command, false, false).await
 }
 
 #[tauri::command]
 pub async fn set_power_plan(high_performance: bool) -> Result<String, String> {
     check_auth()?;
-    
+
     let plan_guid = if high_performance {
         "8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c"
     } else {
         "381b4222-f694-41f0-9685-ff5bb260df2e"
     };
-    let command = format!(r#"powercfg /setactive {}; "Power plan set successfully""#, plan_guid);
+    let command = format!(
+        r#"powercfg /setactive {}; "Power plan set successfully""#,
+        plan_guid
+    );
     run_powershell_internal(command, false, false).await
 }
 
 #[tauri::command]
 pub async fn get_current_power_plan() -> Result<String, String> {
     check_auth()?;
-    
+
     let command = r#"
         $plan = powercfg /getactivescheme
         $guid = $plan | Select-String -Pattern "GUID" | ForEach-Object { $parts = $_.Line.Split([char]58); if ($parts.Length -gt 1) { $parts[1].Trim() } else { "" } }
@@ -903,7 +1040,7 @@ pub async fn get_current_power_plan() -> Result<String, String> {
 #[tauri::command]
 pub async fn disable_recall() -> Result<String, String> {
     check_auth()?;
-    
+
     let command = r#"
         New-Item -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsCopilot" -Force | Out-Null
         Set-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsCopilot" -Name "TurnOffWindowsCopilot" -Value 1 -Type DWord -Force
@@ -917,7 +1054,7 @@ pub async fn disable_recall() -> Result<String, String> {
 #[tauri::command]
 pub async fn disable_telemetry_advanced() -> Result<String, String> {
     check_auth()?;
-    
+
     let command = r#"
         $paths = @(
             "HKLM:\SOFTWARE\Policies\Microsoft\Windows\DataCollection",
@@ -937,7 +1074,7 @@ pub async fn disable_telemetry_advanced() -> Result<String, String> {
 #[tauri::command]
 pub async fn remove_onedrive() -> Result<String, String> {
     check_auth()?;
-    
+
     let command = r#"
         try {
             Get-Process -Name "OneDrive" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
@@ -960,7 +1097,7 @@ pub async fn remove_onedrive() -> Result<String, String> {
 #[tauri::command]
 pub async fn disable_location_tracking_advanced() -> Result<String, String> {
     check_auth()?;
-    
+
     let command = r#"
         New-Item -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\LocationAndSensors" -Force | Out-Null
         Set-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\LocationAndSensors" -Name "DisableLocation" -Value 1 -Type DWord -Force
@@ -973,7 +1110,7 @@ pub async fn disable_location_tracking_advanced() -> Result<String, String> {
 #[tauri::command]
 pub async fn remove_home_gallery() -> Result<String, String> {
     check_auth()?;
-    
+
     let command = r#"
         Get-AppxPackage *Microsoft.Windows.Photos* | Remove-AppxPackage -ErrorAction SilentlyContinue
         Get-AppxPackage *Microsoft.Windows.Home* | Remove-AppxPackage -ErrorAction SilentlyContinue
@@ -985,7 +1122,7 @@ pub async fn remove_home_gallery() -> Result<String, String> {
 #[tauri::command]
 pub async fn disable_teredo() -> Result<String, String> {
     check_auth()?;
-    
+
     let command = r#"
         Set-NetTeredoConfiguration -Type Disabled -ErrorAction SilentlyContinue
         netsh interface teredo set state disabled
@@ -997,7 +1134,7 @@ pub async fn disable_teredo() -> Result<String, String> {
 #[tauri::command]
 pub async fn block_adobe_network() -> Result<String, String> {
     check_auth()?;
-    
+
     let command = r#"
         $hostsPath = "$env:SystemRoot\System32\drivers\etc\hosts"
         $adobeDomains = @(
@@ -1360,7 +1497,7 @@ pub async fn apply_storage_sense_profile(profile: String) -> Result<String, Stri
         "light" => (30, 30, 30, "Light"),
         "balanced" => (7, 14, 30, "Balanced"),
         "aggressive" => (1, 7, 7, "Aggressive"),
-        _ => return Err("Gecersiz profil".to_string())
+        _ => return Err("Gecersiz profil".to_string()),
     };
 
     let command = format!(
@@ -1655,7 +1792,7 @@ pub async fn monitor_app_usage() -> Result<String, String> {
 #[tauri::command]
 pub async fn debloat_adobe() -> Result<String, String> {
     check_auth()?;
-    
+
     let command = r#"
         Get-AppxPackage *Adobe* | Remove-AppxPackage -ErrorAction SilentlyContinue
         $adobePaths = @(
@@ -1676,7 +1813,7 @@ pub async fn debloat_adobe() -> Result<String, String> {
 #[tauri::command]
 pub async fn disable_consumer_features() -> Result<String, String> {
     check_auth()?;
-    
+
     let command = r#"
         New-Item -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\CloudContent" -Force | Out-Null
         Set-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\CloudContent" -Name "DisableWindowsConsumerFeatures" -Value 1 -Type DWord -Force
@@ -1689,7 +1826,7 @@ pub async fn disable_consumer_features() -> Result<String, String> {
 #[tauri::command]
 pub async fn disable_game_dvr() -> Result<String, String> {
     check_auth()?;
-    
+
     let command = r#"
         New-Item -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\GameDVR" -Force | Out-Null
         Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\GameDVR" -Name "AppCaptureEnabled" -Value 0 -Type DWord -Force
@@ -1704,7 +1841,7 @@ pub async fn disable_game_dvr() -> Result<String, String> {
 #[tauri::command]
 pub async fn disable_hibernation() -> Result<String, String> {
     check_auth()?;
-    
+
     let command = r#"
         powercfg /hibernate off
         "Hibernation disabled successfully"
@@ -1720,7 +1857,7 @@ pub async fn set_terminal_default_ps7() -> Result<String, String> {
 #[tauri::command]
 pub async fn create_restore_point() -> Result<String, String> {
     check_auth()?;
-    
+
     let command = r#"
         [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
         $OutputEncoding = [System.Text.Encoding]::UTF8
@@ -1759,7 +1896,7 @@ pub async fn list_restore_points() -> Result<String, String> {
         }
     "#;
     let result = run_powershell_no_rate_limit(command.to_string()).await?;
-    
+
     let trimmed = result.trim();
     if trimmed.is_empty() || trimmed == "null" {
         Ok("[]".to_string())
@@ -1828,18 +1965,25 @@ pub async fn disable_wifi_sense() -> Result<String, String> {
 #[tauri::command]
 pub async fn toggle_end_task_right_click(enable: bool) -> Result<String, String> {
     let hkey = HKEY_CURRENT_USER;
-    let path = r"Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced\TaskbarDeveloperSettings";
-    
+    let path =
+        r"Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced\TaskbarDeveloperSettings";
+
     let (regkey, _) = RegKey::predef(hkey)
         .create_subkey(path)
         .map_err(|e| format!("Failed to create/open registry key: {}", e))?;
 
     let val: u32 = if enable { 1 } else { 0 };
-    regkey.set_value("TaskbarEndTask", &val)
+    regkey
+        .set_value("TaskbarEndTask", &val)
         .map_err(|e| format!("Failed to write registry value: {}", e))?;
 
     let _ = Command::new("powershell")
-        .args(["-NoProfile", "-NonInteractive", "-Command", "Stop-Process -ProcessName explorer -Force"])
+        .args([
+            "-NoProfile",
+            "-NonInteractive",
+            "-Command",
+            "Stop-Process -ProcessName explorer -Force",
+        ])
         .creation_flags(0x08000000)
         .output();
 
@@ -1849,8 +1993,9 @@ pub async fn toggle_end_task_right_click(enable: bool) -> Result<String, String>
 #[tauri::command]
 pub async fn get_end_task_status() -> Result<bool, String> {
     let hkey = HKEY_CURRENT_USER;
-    let path = r"Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced\TaskbarDeveloperSettings";
-    
+    let path =
+        r"Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced\TaskbarDeveloperSettings";
+
     let regkey = RegKey::predef(hkey)
         .open_subkey(path)
         .map_err(|e| format!("Failed to open registry key: {}", e))?;
@@ -1861,7 +2006,14 @@ pub async fn get_end_task_status() -> Result<bool, String> {
 
 #[tauri::command]
 pub async fn prefer_ipv4_over_ipv6() -> Result<String, String> {
-    write_registry("HKEY_LOCAL_MACHINE".to_string(), r"SYSTEM\CurrentControlSet\Services\Tcpip6\Parameters".to_string(), "DisabledComponents".to_string(), "32".to_string()).await
+    write_registry(
+        "HKEY_LOCAL_MACHINE".to_string(),
+        r"SYSTEM\CurrentControlSet\Services\Tcpip6\Parameters".to_string(),
+        "DisabledComponents".to_string(),
+        "32".to_string(),
+        None,
+    )
+    .await
 }
 
 #[tauri::command]
@@ -1938,7 +2090,7 @@ pub async fn disable_copilot() -> Result<String, String> {
 #[tauri::command]
 pub async fn disable_notification_tray() -> Result<String, String> {
     check_auth()?;
-    
+
     let command = r#"
         [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
         $OutputEncoding = [System.Text.Encoding]::UTF8
@@ -1955,26 +2107,28 @@ pub async fn disable_notification_tray() -> Result<String, String> {
 #[tauri::command]
 pub async fn set_dns(dns_type: String) -> Result<String, String> {
     check_auth()?;
-    
+
     let (dns1_chars, dns2_chars) = match dns_type.as_str() {
-        "cloudflare" => (
-            vec![49, 49, 49, 49],
-            vec![49, 48, 48, 49]
-        ),
-        "google" => (
-            vec![56, 56, 56, 56],
-            vec![56, 56, 52, 52]
-        ),
+        "cloudflare" => (vec![49, 49, 49, 49], vec![49, 48, 48, 49]),
+        "google" => (vec![56, 56, 56, 56], vec![56, 56, 52, 52]),
         "quad9" => (
             vec![57, 57, 57, 57],
-            vec![49, 52, 57, 49, 49, 50, 49, 49, 50]
+            vec![49, 52, 57, 49, 49, 50, 49, 49, 50],
         ),
         _ => return Err("Geçersiz DNS tipi".to_string()),
     };
-    
-    let dns1_str = dns1_chars.iter().map(|c| format!("[char]{}", c)).collect::<Vec<_>>().join(", ");
-    let dns2_str = dns2_chars.iter().map(|c| format!("[char]{}", c)).collect::<Vec<_>>().join(", ");
-    
+
+    let dns1_str = dns1_chars
+        .iter()
+        .map(|c| format!("[char]{}", c))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let dns2_str = dns2_chars
+        .iter()
+        .map(|c| format!("[char]{}", c))
+        .collect::<Vec<_>>()
+        .join(", ");
+
     let command = format!(
         r#"
         try {{
@@ -2043,27 +2197,34 @@ pub async fn set_dns(dns_type: String) -> Result<String, String> {
         "#,
         dns1_str, dns2_str
     );
-    
+
     let result = run_powershell_no_rate_limit(command).await?;
-    
+
     let trimmed = result.trim();
     if trimmed.is_empty() {
-        return Err("DNS ayarlama komutu boş yanıt döndürdü. Yönetici yetkisi gerekebilir.".to_string());
+        return Err(
+            "DNS ayarlama komutu boş yanıt döndürdü. Yönetici yetkisi gerekebilir.".to_string(),
+        );
     }
-    
+
     match serde_json::from_str::<serde_json::Value>(&trimmed) {
         Ok(json) => {
             if let Some(success) = json.get("Success") {
                 if success.as_bool().unwrap_or(false) {
                     if let Some(msg) = json.get("Message") {
-                        Ok(msg.as_str().unwrap_or("DNS başarıyla ayarlandı").to_string())
+                        Ok(msg
+                            .as_str()
+                            .unwrap_or("DNS başarıyla ayarlandı")
+                            .to_string())
                     } else {
                         Ok("DNS başarıyla ayarlandı".to_string())
                     }
                 } else {
                     if let Some(err) = json.get("Error") {
                         let error_msg = err.as_str().unwrap_or("DNS ayarlanamadı");
-                        if error_msg.contains("Access is denied") || error_msg.contains("Yetki reddedildi") {
+                        if error_msg.contains("Access is denied")
+                            || error_msg.contains("Yetki reddedildi")
+                        {
                             Err("DNS ayarlanamadı: Yönetici yetkisi gerekli. Lütfen uygulamayı yönetici olarak çalıştırın.".to_string())
                         } else {
                             Err(error_msg.to_string())
@@ -2078,9 +2239,19 @@ pub async fn set_dns(dns_type: String) -> Result<String, String> {
         }
         Err(parse_err) => {
             let trimmed_lower = trimmed.to_lowercase();
-            if trimmed_lower.contains("success") || trimmed_lower.contains("ayarlandı") || trimmed_lower.contains("dns") {
-                if trimmed_lower.contains("error") || trimmed_lower.contains("hata") || trimmed_lower.contains("failed") || trimmed_lower.contains("access denied") || trimmed_lower.contains("yetki") {
-                    if trimmed_lower.contains("access denied") || trimmed_lower.contains("yetki reddedildi") {
+            if trimmed_lower.contains("success")
+                || trimmed_lower.contains("ayarlandı")
+                || trimmed_lower.contains("dns")
+            {
+                if trimmed_lower.contains("error")
+                    || trimmed_lower.contains("hata")
+                    || trimmed_lower.contains("failed")
+                    || trimmed_lower.contains("access denied")
+                    || trimmed_lower.contains("yetki")
+                {
+                    if trimmed_lower.contains("access denied")
+                        || trimmed_lower.contains("yetki reddedildi")
+                    {
                         Err("DNS ayarlanamadı: Yönetici yetkisi gerekli. Lütfen uygulamayı yönetici olarak çalıştırın.".to_string())
                     } else {
                         Err(format!("DNS ayarlama hatası: {}", trimmed))
@@ -2089,7 +2260,10 @@ pub async fn set_dns(dns_type: String) -> Result<String, String> {
                     Ok(trimmed.to_string())
                 }
             } else {
-                Err(format!("DNS ayarlama hatası (JSON parse): {} - Raw: {}", parse_err, trimmed))
+                Err(format!(
+                    "DNS ayarlama hatası (JSON parse): {} - Raw: {}",
+                    parse_err, trimmed
+                ))
             }
         }
     }
@@ -2112,7 +2286,6 @@ pub async fn remove_all_store_apps() -> Result<String, String> {
 
 #[tauri::command]
 pub async fn remove_edge() -> Result<String, String> {
-
     let kill_cmd = r#"
         taskkill /F /IM msedge.exe /T 2>&1 | Out-Null
         taskkill /F /IM msedgewebview2.exe /T 2>&1 | Out-Null
@@ -2218,7 +2391,10 @@ pub async fn set_time_utc() -> Result<String, String> {
 
 #[tauri::command]
 pub async fn enable_autostart(enabled: bool) -> Result<String, String> {
-    let exe = std::env::current_exe().map_err(|e| e.to_string())?.to_string_lossy().to_string();
+    let exe = std::env::current_exe()
+        .map_err(|e| e.to_string())?
+        .to_string_lossy()
+        .to_string();
     let command = if enabled {
         format!("Set-ItemProperty -Path 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run' -Name 'ConfUtils' -Value '{}'", exe)
     } else {
@@ -2230,16 +2406,19 @@ pub async fn enable_autostart(enabled: bool) -> Result<String, String> {
 #[tauri::command]
 pub async fn install_winget_package(package_id: String) -> Result<String, String> {
     check_auth()?;
-    
+
     let escaped_id = package_id.replace('"', "`\"");
-    let command = format!(r#"winget install --id "{}" -e --silent --accept-package-agreements --accept-source-agreements --force --disable-interactivity; if ($LASTEXITCODE -eq 0) {{ "Package installed successfully" }} else {{ throw "Installation failed" }}"#, escaped_id);
+    let command = format!(
+        r#"winget install --id "{}" -e --silent --accept-package-agreements --accept-source-agreements --force --disable-interactivity; if ($LASTEXITCODE -eq 0) {{ "Package installed successfully" }} else {{ throw "Installation failed" }}"#,
+        escaped_id
+    );
     run_powershell_internal(command, false, false).await
 }
 
 #[tauri::command]
 pub async fn get_installed_apps() -> Result<String, String> {
     check_auth()?;
-    
+
     let command = r#"
         try {
             [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
@@ -2382,21 +2561,22 @@ pub async fn get_installed_apps() -> Result<String, String> {
             $errorResult | ConvertTo-Json -Compress
         }
     "#;
-    
+
     let result = run_powershell_no_rate_limit_no_security(command.to_string()).await?;
-    
+
     let trimmed = result.trim();
     if trimmed.is_empty() {
         return Ok("[]".to_string());
     }
-    
+
     match serde_json::from_str::<serde_json::Value>(&trimmed) {
         Ok(json) => {
             if let Some(success) = json.get("Success") {
                 if success.as_bool().unwrap_or(false) {
                     if let Some(apps) = json.get("Apps") {
                         if let Some(apps_array) = apps.as_array() {
-                            Ok(serde_json::to_string(apps_array).unwrap_or_else(|_| "[]".to_string()))
+                            Ok(serde_json::to_string(apps_array)
+                                .unwrap_or_else(|_| "[]".to_string()))
                         } else {
                             Ok("[]".to_string())
                         }
@@ -2405,7 +2585,10 @@ pub async fn get_installed_apps() -> Result<String, String> {
                     }
                 } else {
                     if let Some(error) = json.get("Error") {
-                        Err(format!("Winget hatası: {}", error.as_str().unwrap_or("Bilinmeyen hata")))
+                        Err(format!(
+                            "Winget hatası: {}",
+                            error.as_str().unwrap_or("Bilinmeyen hata")
+                        ))
                     } else {
                         Err("Winget komutu başarısız oldu".to_string())
                     }
@@ -2427,7 +2610,7 @@ pub async fn get_installed_apps() -> Result<String, String> {
 #[tauri::command]
 pub async fn get_appx_packages() -> Result<String, String> {
     check_auth()?;
-    
+
     let command = r#"
         [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
         $OutputEncoding = [System.Text.Encoding]::UTF8
@@ -2441,22 +2624,27 @@ pub async fn get_appx_packages() -> Result<String, String> {
 #[tauri::command]
 pub async fn update_winget_package(package_id: String) -> Result<String, String> {
     check_auth()?;
-    
+
     let escaped_id = package_id.replace('"', "`\"");
-    let command = format!(r#"winget upgrade --id "{}" -e --silent --accept-package-agreements --accept-source-agreements --disable-interactivity; if ($LASTEXITCODE -eq 0) {{ "Package updated successfully" }} else {{ throw "Update failed" }}"#, escaped_id);
+    let command = format!(
+        r#"winget upgrade --id "{}" -e --silent --accept-package-agreements --accept-source-agreements --disable-interactivity; if ($LASTEXITCODE -eq 0) {{ "Package updated successfully" }} else {{ throw "Update failed" }}"#,
+        escaped_id
+    );
     run_powershell_internal(command, false, false).await
 }
 
 #[tauri::command]
-pub async fn uninstall_winget_package(package_id: String, package_name: Option<String>) -> Result<String, String> {
+pub async fn uninstall_winget_package(
+    package_id: String,
+    package_name: Option<String>,
+) -> Result<String, String> {
     check_auth()?;
-    
+
     let escaped_id = package_id.replace('"', "`\"");
     let escaped_name = package_name.unwrap_or_default().replace('"', "`\"");
     let command = format!(
         r#"$pkgId = "{}"; $pkgName = "{}"; $commonArgs = @("--silent", "--force"); $out = (winget uninstall --id "$pkgId" -e @commonArgs 2>&1 | Out-String); if ($LASTEXITCODE -ne 0 -and $pkgName -ne "") {{ $out = (winget uninstall --name "$pkgName" -e @commonArgs 2>&1 | Out-String) }}; if ($LASTEXITCODE -eq 0) {{ "Package uninstalled successfully" }} else {{ $msg = $out.Trim(); if ($msg -eq "") {{ $msg = "Winget uninstall failed" }}; $msg; exit 1 }}"#,
-        escaped_id,
-        escaped_name
+        escaped_id, escaped_name
     );
     run_powershell_internal(command, false, false).await
 }
@@ -2464,13 +2652,16 @@ pub async fn uninstall_winget_package(package_id: String, package_name: Option<S
 #[tauri::command]
 pub async fn remove_appx_package(package_full_name: String) -> Result<String, String> {
     check_auth()?;
-    
+
     if package_full_name.trim().is_empty() {
         return Err("Package name cannot be empty".to_string());
     }
-    
+
     let escaped_name = package_full_name.replace('"', "`\"");
-    let command = format!(r#"Remove-AppxPackage -Package "{}" -ErrorAction Stop; "Appx package removed successfully""#, escaped_name);
+    let command = format!(
+        r#"Remove-AppxPackage -Package "{}" -ErrorAction Stop; "Appx package removed successfully""#,
+        escaped_name
+    );
     run_powershell_internal(command, false, false).await
 }
 
@@ -2642,22 +2833,24 @@ pub async fn set_services_manual() -> Result<String, String> {
 
 #[tauri::command]
 pub async fn get_binary_hash() -> Result<String, String> {
-    use sha2::{Sha256, Digest};
+    use sha2::{Digest, Sha256};
     use std::io::Read;
 
-    let exe_path = std::env::current_exe()
-        .map_err(|e| format!("Failed to get exe path: {}", e))?;
+    let exe_path = std::env::current_exe().map_err(|e| format!("Failed to get exe path: {}", e))?;
 
-    let mut file = std::fs::File::open(exe_path)
-        .map_err(|e| format!("Failed to open exe: {}", e))?;
+    let mut file =
+        std::fs::File::open(exe_path).map_err(|e| format!("Failed to open exe: {}", e))?;
 
     let mut hasher = Sha256::new();
     let mut buffer = [0u8; 4096];
 
     loop {
-        let n = file.read(&mut buffer)
+        let n = file
+            .read(&mut buffer)
             .map_err(|e| format!("Failed to read exe: {}", e))?;
-        if n == 0 { break; }
+        if n == 0 {
+            break;
+        }
         hasher.update(&buffer[..n]);
     }
 
@@ -2713,20 +2906,26 @@ pub async fn clone_discord_server(
     emit_log(format!("[INFO] Target Server ID: {}", target_server_id));
 
     emit_log(obfstr::obfstr!("[WARNING] This tool uses Discord user tokens which may violate Discord's Terms of Service").to_string());
-    emit_log(obfstr::obfstr!("[WARNING] Use at your own risk - your account may be banned").to_string());
+    emit_log(
+        obfstr::obfstr!("[WARNING] Use at your own risk - your account may be banned").to_string(),
+    );
 
     let client = reqwest::Client::new();
     let base_url = obfstr::obfstr!("https://discord.com/api/v10").to_string();
 
     let me_url = format!("{}/users/@me", base_url);
-    let me_resp = client.get(&me_url)
+    let me_resp = client
+        .get(&me_url)
         .header("Authorization", &user_token)
         .send()
         .await
         .map_err(|e| format!("[ERROR] Failed to connect to Discord: {}", e))?;
 
     if !me_resp.status().is_success() {
-        return Err(format!("[ERROR] Invalid token or connection error. Status: {}", me_resp.status()));
+        return Err(format!(
+            "[ERROR] Invalid token or connection error. Status: {}",
+            me_resp.status()
+        ));
     }
 
     emit_log("[+] Fetching source server information...".to_string());
@@ -2739,10 +2938,15 @@ pub async fn clone_discord_server(
         .map_err(|e| format!("[ERROR] Failed to fetch source server: {}", e))?;
 
     if !source_guild_resp.status().is_success() {
-        return Err(format!("[ERROR] Failed to fetch source server. Status: {}", source_guild_resp.status()));
+        return Err(format!(
+            "[ERROR] Failed to fetch source server. Status: {}",
+            source_guild_resp.status()
+        ));
     }
 
-    let source_guild: Value = source_guild_resp.json().await
+    let source_guild: Value = source_guild_resp
+        .json()
+        .await
         .map_err(|e| format!("[ERROR] Failed to parse source server data: {}", e))?;
 
     let server_name = source_guild["name"].as_str().unwrap_or("Unknown");
@@ -2761,25 +2965,36 @@ pub async fn clone_discord_server(
         if let Some(icon_hash) = source_guild["icon"].as_str() {
             if !icon_hash.is_empty() {
                 emit_log("[+] Downloading server icon...".to_string());
-                let icon_url = format!("https://cdn.discordapp.com/icons/{}/{}.png", source_server_id, icon_hash);
+                let icon_url = format!(
+                    "https://cdn.discordapp.com/icons/{}/{}.png",
+                    source_server_id, icon_hash
+                );
 
                 match client.get(&icon_url).send().await {
                     Ok(icon_resp) => {
                         if icon_resp.status().is_success() {
                             match icon_resp.bytes().await {
                                 Ok(icon_bytes) => {
-                                    let base64_icon = base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &icon_bytes);
-                                    guild_update["icon"] = Value::String(format!("data:image/png;base64,{}", base64_icon));
+                                    let base64_icon = base64::Engine::encode(
+                                        &base64::engine::general_purpose::STANDARD,
+                                        &icon_bytes,
+                                    );
+                                    guild_update["icon"] = Value::String(format!(
+                                        "data:image/png;base64,{}",
+                                        base64_icon
+                                    ));
                                     emit_log("[+] Server icon downloaded".to_string());
                                     has_updates = true;
-                                },
-                                Err(_) => emit_log("[WARNING] Failed to read icon data".to_string())
+                                }
+                                Err(_) => {
+                                    emit_log("[WARNING] Failed to read icon data".to_string())
+                                }
                             }
                         } else {
                             emit_log("[WARNING] Failed to download server icon".to_string());
                         }
-                    },
-                    Err(_) => emit_log("[WARNING] Failed to fetch server icon".to_string())
+                    }
+                    Err(_) => emit_log("[WARNING] Failed to fetch server icon".to_string()),
                 }
             }
         }
@@ -2787,20 +3002,25 @@ pub async fn clone_discord_server(
 
     if has_updates {
         let update_guild_url = format!("{}/guilds/{}", base_url, target_server_id);
-        match client.patch(&update_guild_url)
+        match client
+            .patch(&update_guild_url)
             .header("Authorization", &user_token)
             .header("Content-Type", "application/json")
             .json(&guild_update)
             .send()
-            .await {
+            .await
+        {
             Ok(resp) => {
                 if resp.status().is_success() {
                     emit_log("[+] Updated target server settings".to_string());
                 } else {
-                    emit_log(format!("[WARNING] Failed to update server settings. Status: {}", resp.status()));
+                    emit_log(format!(
+                        "[WARNING] Failed to update server settings. Status: {}",
+                        resp.status()
+                    ));
                 }
-            },
-            Err(e) => emit_log(format!("[WARNING] Failed to update server: {}", e))
+            }
+            Err(e) => emit_log(format!("[WARNING] Failed to update server: {}", e)),
         }
     }
 
@@ -2851,7 +3071,10 @@ pub async fn clone_discord_server(
                             "deny": deny
                         }));
                     } else {
-                        emit_log(format!("[WARNING] Missing role mapping for permission overwrite {}", overwrite_id));
+                        emit_log(format!(
+                            "[WARNING] Missing role mapping for permission overwrite {}",
+                            overwrite_id
+                        ));
                     }
                 } else if overwrite_type == 1 {
                     mapped.push(serde_json::json!({
@@ -2869,30 +3092,54 @@ pub async fn clone_discord_server(
     if options.roles {
         emit_log("[+] Deleting existing roles in target server...".to_string());
         let target_roles_url = format!("{}/guilds/{}/roles", base_url, target_server_id);
-        if let Ok(target_roles_resp) = client.get(&target_roles_url).header("Authorization", &user_token).send().await {
+        if let Ok(target_roles_resp) = client
+            .get(&target_roles_url)
+            .header("Authorization", &user_token)
+            .send()
+            .await
+        {
             if target_roles_resp.status().is_success() {
                 if let Ok(target_roles) = target_roles_resp.json::<Value>().await {
                     if let Some(roles) = target_roles.as_array() {
                         for role in roles {
                             check_cancel()?;
                             if let Some(role_name) = role["name"].as_str() {
-                                if role_name != "@everyone" && role["managed"].as_bool() != Some(true) {
+                                if role_name != "@everyone"
+                                    && role["managed"].as_bool() != Some(true)
+                                {
                                     if let Some(role_id) = role["id"].as_str() {
-                                        let delete_url = format!("{}/guilds/{}/roles/{}", base_url, target_server_id, role_id);
-                                        match client.delete(&delete_url).header("Authorization", &user_token).send().await {
+                                        let delete_url = format!(
+                                            "{}/guilds/{}/roles/{}",
+                                            base_url, target_server_id, role_id
+                                        );
+                                        match client
+                                            .delete(&delete_url)
+                                            .header("Authorization", &user_token)
+                                            .send()
+                                            .await
+                                        {
                                             Ok(resp) => {
                                                 let status = resp.status();
                                                 if status.is_success() {
-                                                    emit_log(format!("[-] Deleted role: {}", role_name));
+                                                    emit_log(format!(
+                                                        "[-] Deleted role: {}",
+                                                        role_name
+                                                    ));
                                                 } else if status == reqwest::StatusCode::FORBIDDEN {
                                                     emit_log(format!("[WARNING] No permission to delete role: {}", role_name));
                                                 } else if status != reqwest::StatusCode::NOT_FOUND {
                                                     emit_log(format!("[WARNING] Failed to delete role {}: Status {}", role_name, status));
                                                 }
-                                            },
-                                            Err(e) => emit_log(format!("[ERROR] Network error deleting role {}: {}", role_name, e))
+                                            }
+                                            Err(e) => emit_log(format!(
+                                                "[ERROR] Network error deleting role {}: {}",
+                                                role_name, e
+                                            )),
                                         }
-                                        tokio::time::sleep(tokio::time::Duration::from_millis(1500)).await;
+                                        tokio::time::sleep(tokio::time::Duration::from_millis(
+                                            1500,
+                                        ))
+                                        .await;
                                     }
                                 }
                             }
@@ -2900,10 +3147,13 @@ pub async fn clone_discord_server(
                     }
                 }
             } else {
-                 emit_log(format!("[WARNING] Failed to fetch target roles for deletion. Status: {}", target_roles_resp.status()));
+                emit_log(format!(
+                    "[WARNING] Failed to fetch target roles for deletion. Status: {}",
+                    target_roles_resp.status()
+                ));
             }
         } else {
-             emit_log("[WARNING] Network error fetching target roles".to_string());
+            emit_log("[WARNING] Network error fetching target roles".to_string());
         }
 
         emit_log("[+] Fetching roles from source server...".to_string());
@@ -2916,14 +3166,17 @@ pub async fn clone_discord_server(
             .map_err(|e| format!("[ERROR] Failed to fetch roles: {}", e))?;
 
         if roles_resp.status().is_success() {
-            let roles: Value = roles_resp.json().await
+            let roles: Value = roles_resp
+                .json()
+                .await
                 .map_err(|e| format!("[ERROR] Failed to parse roles: {}", e))?;
 
             if let Some(mut roles_array) = roles.as_array().map(|r| r.clone()) {
                 emit_log(format!("[+] Found {} roles", roles_array.len()));
 
-                
-                roles_array.retain(|r| r["name"].as_str() != Some("@everyone") && r["managed"].as_bool() != Some(true));
+                roles_array.retain(|r| {
+                    r["name"].as_str() != Some("@everyone") && r["managed"].as_bool() != Some(true)
+                });
 
                 for role in roles_array {
                     check_cancel()?;
@@ -2936,26 +3189,39 @@ pub async fn clone_discord_server(
                             "mentionable": role["mentionable"].as_bool().unwrap_or(false),
                         });
 
-                        let create_role_url = format!("{}/guilds/{}/roles", base_url, target_server_id);
-                        match client.post(&create_role_url)
+                        let create_role_url =
+                            format!("{}/guilds/{}/roles", base_url, target_server_id);
+                        match client
+                            .post(&create_role_url)
                             .header("Authorization", &user_token)
                             .header("Content-Type", "application/json")
                             .json(&role_data)
                             .send()
-                            .await {
+                            .await
+                        {
                             Ok(resp) => {
                                 if resp.status().is_success() {
-                                    let new_role: Value = resp.json().await.unwrap_or(serde_json::json!({}));
-                                    if let (Some(old_id), Some(new_id)) = (role["id"].as_str(), new_role["id"].as_str()) {
+                                    let new_role: Value =
+                                        resp.json().await.unwrap_or(serde_json::json!({}));
+                                    if let (Some(old_id), Some(new_id)) =
+                                        (role["id"].as_str(), new_role["id"].as_str())
+                                    {
                                         role_id_map.insert(old_id.to_string(), new_id.to_string());
                                     }
                                     emit_log(format!("[+] Created role: {}", role_name));
                                 } else {
-                                    emit_log(format!("[WARNING] Failed to create role: {} (Status: {})", role_name, resp.status()));
+                                    emit_log(format!(
+                                        "[WARNING] Failed to create role: {} (Status: {})",
+                                        role_name,
+                                        resp.status()
+                                    ));
                                 }
-                            },
+                            }
                             Err(e) => {
-                                emit_log(format!("[ERROR] Failed to create role {}: {}", role_name, e));
+                                emit_log(format!(
+                                    "[ERROR] Failed to create role {}: {}",
+                                    role_name, e
+                                ));
                             }
                         }
 
@@ -2964,7 +3230,10 @@ pub async fn clone_discord_server(
                 }
             }
         } else {
-            emit_log(format!("[WARNING] Failed to fetch roles. Status: {}", roles_resp.status()));
+            emit_log(format!(
+                "[WARNING] Failed to fetch roles. Status: {}",
+                roles_resp.status()
+            ));
         }
     }
 
@@ -2974,38 +3243,60 @@ pub async fn clone_discord_server(
         let target_roles_url = format!("{}/guilds/{}/roles", base_url, target_server_id);
 
         let mut source_role_name_map: HashMap<String, String> = HashMap::new();
-        if let Ok(resp) = client.get(&source_roles_url).header("Authorization", &user_token).send().await {
+        if let Ok(resp) = client
+            .get(&source_roles_url)
+            .header("Authorization", &user_token)
+            .send()
+            .await
+        {
             if resp.status().is_success() {
                 if let Ok(roles) = resp.json::<Value>().await {
                     if let Some(roles_array) = roles.as_array() {
                         for role in roles_array {
-                            if let (Some(role_id), Some(role_name)) = (role["id"].as_str(), role["name"].as_str()) {
-                                source_role_name_map.insert(role_id.to_string(), role_name.to_string());
+                            if let (Some(role_id), Some(role_name)) =
+                                (role["id"].as_str(), role["name"].as_str())
+                            {
+                                source_role_name_map
+                                    .insert(role_id.to_string(), role_name.to_string());
                             }
                         }
                     }
                 }
             } else {
-                emit_log(format!("[WARNING] Failed to fetch source roles for permissions. Status: {}", resp.status()));
+                emit_log(format!(
+                    "[WARNING] Failed to fetch source roles for permissions. Status: {}",
+                    resp.status()
+                ));
             }
         } else {
             emit_log("[WARNING] Network error fetching source roles for permissions".to_string());
         }
 
         let mut target_role_name_map: HashMap<String, String> = HashMap::new();
-        if let Ok(resp) = client.get(&target_roles_url).header("Authorization", &user_token).send().await {
+        if let Ok(resp) = client
+            .get(&target_roles_url)
+            .header("Authorization", &user_token)
+            .send()
+            .await
+        {
             if resp.status().is_success() {
                 if let Ok(roles) = resp.json::<Value>().await {
                     if let Some(roles_array) = roles.as_array() {
                         for role in roles_array {
-                            if let (Some(role_id), Some(role_name)) = (role["id"].as_str(), role["name"].as_str()) {
-                                target_role_name_map.insert(role_name.to_string(), role_id.to_string());
+                            if let (Some(role_id), Some(role_name)) =
+                                (role["id"].as_str(), role["name"].as_str())
+                            {
+                                target_role_name_map
+                                    .insert(role_name.to_string(), role_id.to_string());
                             }
                         }
                     }
                 }
             } else {
-                emit_log(format!("[WARNING] Failed to fetch target roles for permissions. Status: {}", resp.status()));
+                emit_log(format!(
+                    "[WARNING] Failed to fetch target roles for permissions. Status: {}",
+                    resp.status()
+                ));
             }
         } else {
             emit_log("[WARNING] Network error fetching target roles for permissions".to_string());
@@ -3025,7 +3316,12 @@ pub async fn clone_discord_server(
     if options.channels {
         emit_log("[+] Deleting existing channels in target server...".to_string());
         let target_channels_url = format!("{}/guilds/{}/channels", base_url, target_server_id);
-        if let Ok(target_channels_resp) = client.get(&target_channels_url).header("Authorization", &user_token).send().await {
+        if let Ok(target_channels_resp) = client
+            .get(&target_channels_url)
+            .header("Authorization", &user_token)
+            .send()
+            .await
+        {
             if target_channels_resp.status().is_success() {
                 if let Ok(target_channels) = target_channels_resp.json::<Value>().await {
                     if let Some(channels) = target_channels.as_array() {
@@ -3034,18 +3330,35 @@ pub async fn clone_discord_server(
                             if let Some(channel_id) = channel["id"].as_str() {
                                 let channel_name = channel["name"].as_str().unwrap_or("Unknown");
                                 let delete_url = format!("{}/channels/{}", base_url, channel_id);
-                                match client.delete(&delete_url).header("Authorization", &user_token).send().await {
-                                     Ok(resp) => {
+                                match client
+                                    .delete(&delete_url)
+                                    .header("Authorization", &user_token)
+                                    .send()
+                                    .await
+                                {
+                                    Ok(resp) => {
                                         let status = resp.status();
                                         if status.is_success() {
-                                            emit_log(format!("[-] Deleted channel: {}", channel_name));
+                                            emit_log(format!(
+                                                "[-] Deleted channel: {}",
+                                                channel_name
+                                            ));
                                         } else if status == reqwest::StatusCode::FORBIDDEN {
-                                            emit_log(format!("[WARNING] No permission to delete channel: {}", channel_name));
+                                            emit_log(format!(
+                                                "[WARNING] No permission to delete channel: {}",
+                                                channel_name
+                                            ));
                                         } else if status != reqwest::StatusCode::NOT_FOUND {
-                                             emit_log(format!("[WARNING] Failed to delete channel {}: Status {}", channel_name, status));
+                                            emit_log(format!(
+                                                "[WARNING] Failed to delete channel {}: Status {}",
+                                                channel_name, status
+                                            ));
                                         }
-                                     },
-                                     Err(e) => emit_log(format!("[ERROR] Network error deleting channel {}: {}", channel_name, e))
+                                    }
+                                    Err(e) => emit_log(format!(
+                                        "[ERROR] Network error deleting channel {}: {}",
+                                        channel_name, e
+                                    )),
                                 }
                                 tokio::time::sleep(tokio::time::Duration::from_millis(1500)).await;
                             }
@@ -3053,10 +3366,13 @@ pub async fn clone_discord_server(
                     }
                 }
             } else {
-                 emit_log(format!("[WARNING] Failed to fetch target channels for deletion. Status: {}", target_channels_resp.status()));
+                emit_log(format!(
+                    "[WARNING] Failed to fetch target channels for deletion. Status: {}",
+                    target_channels_resp.status()
+                ));
             }
         } else {
-             emit_log("[WARNING] Network error fetching target channels".to_string());
+            emit_log("[WARNING] Network error fetching target channels".to_string());
         }
 
         emit_log("[+] Fetching channels from source server...".to_string());
@@ -3069,7 +3385,9 @@ pub async fn clone_discord_server(
             .map_err(|e| format!("[ERROR] Failed to fetch channels: {}", e))?;
 
         if channels_resp.status().is_success() {
-            let channels: Value = channels_resp.json().await
+            let channels: Value = channels_resp
+                .json()
+                .await
                 .map_err(|e| format!("[ERROR] Failed to parse channels: {}", e))?;
 
             if let Some(channels_array) = channels.as_array() {
@@ -3096,31 +3414,50 @@ pub async fn clone_discord_server(
                                     &emit_log,
                                 );
                                 if !overwrites.is_empty() {
-                                    channel_data["permission_overwrites"] = Value::Array(overwrites);
+                                    channel_data["permission_overwrites"] =
+                                        Value::Array(overwrites);
                                 }
                             }
 
-                            let create_channel_url = format!("{}/guilds/{}/channels", base_url, target_server_id);
-                            match client.post(&create_channel_url)
+                            let create_channel_url =
+                                format!("{}/guilds/{}/channels", base_url, target_server_id);
+                            match client
+                                .post(&create_channel_url)
                                 .header("Authorization", &user_token)
                                 .header("Content-Type", "application/json")
                                 .json(&channel_data)
                                 .send()
-                                .await {
+                                .await
+                            {
                                 Ok(resp) => {
                                     if resp.status().is_success() {
-                                        let new_channel: Value = resp.json().await
-                                            .map_err(|e| format!("[ERROR] Failed to parse created category: {}", e))?;
-                                        if let (Some(old_id), Some(new_id)) = (channel["id"].as_str(), new_channel["id"].as_str()) {
-                                            category_id_map.insert(old_id.to_string(), new_id.to_string());
+                                        let new_channel: Value =
+                                            resp.json().await.map_err(|e| {
+                                                format!(
+                                                    "[ERROR] Failed to parse created category: {}",
+                                                    e
+                                                )
+                                            })?;
+                                        if let (Some(old_id), Some(new_id)) =
+                                            (channel["id"].as_str(), new_channel["id"].as_str())
+                                        {
+                                            category_id_map
+                                                .insert(old_id.to_string(), new_id.to_string());
                                         }
                                         emit_log(format!("[+] Created category: {}", channel_name));
                                     } else {
-                                        emit_log(format!("[WARNING] Failed to create category: {} (Status: {})", channel_name, resp.status()));
+                                        emit_log(format!(
+                                            "[WARNING] Failed to create category: {} (Status: {})",
+                                            channel_name,
+                                            resp.status()
+                                        ));
                                     }
-                                },
+                                }
                                 Err(e) => {
-                                    emit_log(format!("[ERROR] Failed to create category {}: {}", channel_name, e));
+                                    emit_log(format!(
+                                        "[ERROR] Failed to create category {}: {}",
+                                        channel_name, e
+                                    ));
                                 }
                             }
 
@@ -3150,7 +3487,8 @@ pub async fn clone_discord_server(
 
                             if let Some(parent_id) = channel["parent_id"].as_str() {
                                 if let Some(new_parent_id) = category_id_map.get(parent_id) {
-                                    channel_data["parent_id"] = Value::String(new_parent_id.clone());
+                                    channel_data["parent_id"] =
+                                        Value::String(new_parent_id.clone());
                                 }
                             }
 
@@ -3163,26 +3501,37 @@ pub async fn clone_discord_server(
                                     &emit_log,
                                 );
                                 if !overwrites.is_empty() {
-                                    channel_data["permission_overwrites"] = Value::Array(overwrites);
+                                    channel_data["permission_overwrites"] =
+                                        Value::Array(overwrites);
                                 }
                             }
 
-                            let create_channel_url = format!("{}/guilds/{}/channels", base_url, target_server_id);
-                            match client.post(&create_channel_url)
+                            let create_channel_url =
+                                format!("{}/guilds/{}/channels", base_url, target_server_id);
+                            match client
+                                .post(&create_channel_url)
                                 .header("Authorization", &user_token)
                                 .header("Content-Type", "application/json")
                                 .json(&channel_data)
                                 .send()
-                                .await {
+                                .await
+                            {
                                 Ok(resp) => {
                                     if resp.status().is_success() {
                                         emit_log(format!("[+] Created channel: {}", channel_name));
                                     } else {
-                                        emit_log(format!("[WARNING] Failed to create channel: {} (Status: {})", channel_name, resp.status()));
+                                        emit_log(format!(
+                                            "[WARNING] Failed to create channel: {} (Status: {})",
+                                            channel_name,
+                                            resp.status()
+                                        ));
                                     }
-                                },
+                                }
                                 Err(e) => {
-                                    emit_log(format!("[ERROR] Failed to create channel {}: {}", channel_name, e));
+                                    emit_log(format!(
+                                        "[ERROR] Failed to create channel {}: {}",
+                                        channel_name, e
+                                    ));
                                 }
                             }
 
@@ -3192,7 +3541,10 @@ pub async fn clone_discord_server(
                 }
             }
         } else {
-            emit_log(format!("[WARNING] Failed to fetch channels. Status: {}", channels_resp.status()));
+            emit_log(format!(
+                "[WARNING] Failed to fetch channels. Status: {}",
+                channels_resp.status()
+            ));
         }
     }
 
@@ -3207,7 +3559,9 @@ pub async fn clone_discord_server(
             .map_err(|e| format!("[ERROR] Failed to fetch emojis: {}", e))?;
 
         if emojis_resp.status().is_success() {
-            let emojis: Value = emojis_resp.json().await
+            let emojis: Value = emojis_resp
+                .json()
+                .await
                 .map_err(|e| format!("[ERROR] Failed to parse emojis: {}", e))?;
 
             if let Some(emojis_array) = emojis.as_array() {
@@ -3218,7 +3572,10 @@ pub async fn clone_discord_server(
                         if let Some(emoji_id) = emoji["id"].as_str() {
                             let is_animated = emoji["animated"].as_bool().unwrap_or(false);
                             let extension = if is_animated { "gif" } else { "png" };
-                            let emoji_url = format!("https://cdn.discordapp.com/emojis/{}.{}", emoji_id, extension);
+                            let emoji_url = format!(
+                                "https://cdn.discordapp.com/emojis/{}.{}",
+                                emoji_id, extension
+                            );
 
                             emit_log(format!("[+] Downloading emoji: {}", emoji_name));
 
@@ -3227,40 +3584,66 @@ pub async fn clone_discord_server(
                                     if emoji_resp.status().is_success() {
                                         match emoji_resp.bytes().await {
                                             Ok(emoji_bytes) => {
-                                                let base64_emoji = base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &emoji_bytes);
-                                                let image_data = format!("data:image/{};base64,{}", extension, base64_emoji);
+                                                let base64_emoji = base64::Engine::encode(
+                                                    &base64::engine::general_purpose::STANDARD,
+                                                    &emoji_bytes,
+                                                );
+                                                let image_data = format!(
+                                                    "data:image/{};base64,{}",
+                                                    extension, base64_emoji
+                                                );
 
                                                 let emoji_data = serde_json::json!({
                                                     "name": emoji_name,
                                                     "image": image_data,
                                                 });
 
-                                                let create_emoji_url = format!("{}/guilds/{}/emojis", base_url, target_server_id);
-                                                match client.post(&create_emoji_url)
+                                                let create_emoji_url = format!(
+                                                    "{}/guilds/{}/emojis",
+                                                    base_url, target_server_id
+                                                );
+                                                match client
+                                                    .post(&create_emoji_url)
                                                     .header("Authorization", &user_token)
                                                     .header("Content-Type", "application/json")
                                                     .json(&emoji_data)
                                                     .send()
-                                                    .await {
+                                                    .await
+                                                {
                                                     Ok(resp) => {
                                                         if resp.status().is_success() {
-                                                            emit_log(format!("[+] Created emoji: {}", emoji_name));
+                                                            emit_log(format!(
+                                                                "[+] Created emoji: {}",
+                                                                emoji_name
+                                                            ));
                                                         } else {
                                                             emit_log(format!("[WARNING] Failed to create emoji: {} (Status: {})", emoji_name, resp.status()));
                                                         }
-                                                    },
+                                                    }
                                                     Err(e) => {
-                                                        emit_log(format!("[ERROR] Failed to create emoji {}: {}", emoji_name, e));
+                                                        emit_log(format!(
+                                                            "[ERROR] Failed to create emoji {}: {}",
+                                                            emoji_name, e
+                                                        ));
                                                     }
                                                 }
-                                            },
-                                            Err(_) => emit_log(format!("[WARNING] Failed to read emoji data for: {}", emoji_name))
+                                            }
+                                            Err(_) => emit_log(format!(
+                                                "[WARNING] Failed to read emoji data for: {}",
+                                                emoji_name
+                                            )),
                                         }
                                     } else {
-                                        emit_log(format!("[WARNING] Failed to download emoji: {}", emoji_name));
+                                        emit_log(format!(
+                                            "[WARNING] Failed to download emoji: {}",
+                                            emoji_name
+                                        ));
                                     }
-                                },
-                                Err(_) => emit_log(format!("[WARNING] Failed to fetch emoji: {}", emoji_name))
+                                }
+                                Err(_) => emit_log(format!(
+                                    "[WARNING] Failed to fetch emoji: {}",
+                                    emoji_name
+                                )),
                             }
 
                             tokio::time::sleep(tokio::time::Duration::from_millis(2000)).await;
@@ -3269,18 +3652,31 @@ pub async fn clone_discord_server(
                 }
             }
         } else {
-            emit_log(format!("[WARNING] Failed to fetch emojis. Status: {}", emojis_resp.status()));
+            emit_log(format!(
+                "[WARNING] Failed to fetch emojis. Status: {}",
+                emojis_resp.status()
+            ));
         }
     }
 
     emit_log("[+] Cloning process completed successfully!".to_string());
 
     let mut cloned_items = Vec::new();
-    if options.server_name { cloned_items.push("server name"); }
-    if options.server_icon { cloned_items.push("server icon"); }
-    if options.roles { cloned_items.push("roles"); }
-    if options.channels { cloned_items.push("channels"); }
-    if options.emojis { cloned_items.push("emojis"); }
+    if options.server_name {
+        cloned_items.push("server name");
+    }
+    if options.server_icon {
+        cloned_items.push("server icon");
+    }
+    if options.roles {
+        cloned_items.push("roles");
+    }
+    if options.channels {
+        cloned_items.push("channels");
+    }
+    if options.emojis {
+        cloned_items.push("emojis");
+    }
 
     if !cloned_items.is_empty() {
         emit_log(format!("[INFO] Cloned: {}", cloned_items.join(", ")));
@@ -3326,13 +3722,18 @@ pub async fn clone_messages(
     emit_log(format!("[INFO] Source Channel: {}", source_channel_id));
     emit_log(format!("[INFO] Message Limit: {}", options.message_limit));
 
-    emit_log("[WARNING] Using Discord user tokens may violate Discord's Terms of Service".to_string());
+    emit_log(
+        "[WARNING] Using Discord user tokens may violate Discord's Terms of Service".to_string(),
+    );
 
     let client = reqwest::Client::new();
     let base_url = "https://discord.com/api/v10";
 
     emit_log("[+] Fetching messages from source channel...".to_string());
-    let messages_url = format!("{}/channels/{}/messages?limit={}", base_url, source_channel_id, options.message_limit);
+    let messages_url = format!(
+        "{}/channels/{}/messages?limit={}",
+        base_url, source_channel_id, options.message_limit
+    );
 
     let messages_resp = client
         .get(&messages_url)
@@ -3342,10 +3743,15 @@ pub async fn clone_messages(
         .map_err(|e| format!("[ERROR] Failed to fetch messages: {}", e))?;
 
     if !messages_resp.status().is_success() {
-        return Err(format!("[ERROR] Failed to fetch messages. Status: {}", messages_resp.status()));
+        return Err(format!(
+            "[ERROR] Failed to fetch messages. Status: {}",
+            messages_resp.status()
+        ));
     }
 
-    let messages: Vec<Value> = messages_resp.json().await
+    let messages: Vec<Value> = messages_resp
+        .json()
+        .await
         .map_err(|e| format!("[ERROR] Failed to parse messages: {}", e))?;
 
     emit_log(format!("[+] Found {} messages", messages.len()));
@@ -3372,7 +3778,8 @@ pub async fn clone_messages(
         }
 
         if options.only_with_attachments {
-            let has_attachments = msg["attachments"].as_array()
+            let has_attachments = msg["attachments"]
+                .as_array()
                 .map(|arr| !arr.is_empty())
                 .unwrap_or(false);
             if !has_attachments {
@@ -3388,7 +3795,10 @@ pub async fn clone_messages(
         let avatar_url = if let Some(avatar_hash) = author_avatar {
             if !avatar_hash.is_empty() {
                 let user_id = msg["author"]["id"].as_str().unwrap_or("");
-                format!("https://cdn.discordapp.com/avatars/{}/{}.png", user_id, avatar_hash)
+                format!(
+                    "https://cdn.discordapp.com/avatars/{}/{}.png",
+                    user_id, avatar_hash
+                )
             } else {
                 String::new()
             }
@@ -3442,27 +3852,33 @@ pub async fn clone_messages(
                     }
                     if let Some(first_embed) = embeds_array.first_mut() {
                         let current_desc = first_embed["description"].as_str().unwrap_or("");
-                        first_embed["description"] = Value::String(format!("{}{}", current_desc, attachment_desc));
+                        first_embed["description"] =
+                            Value::String(format!("{}{}", current_desc, attachment_desc));
                     }
                     webhook_payload["embeds"] = serde_json::json!(embeds_array);
                 }
             }
         }
 
-        match client.post(&webhook_url)
+        match client
+            .post(&webhook_url)
             .header("Content-Type", "application/json")
             .json(&webhook_payload)
             .send()
-            .await {
+            .await
+        {
             Ok(resp) => {
                 if resp.status().is_success() {
                     sent_count += 1;
                     emit_log(format!("[+] Sent message from {}", author_name));
                 } else {
                     error_count += 1;
-                    emit_log(format!("[WARNING] Failed to send message (Status: {})", resp.status()));
+                    emit_log(format!(
+                        "[WARNING] Failed to send message (Status: {})",
+                        resp.status()
+                    ));
                 }
-            },
+            }
             Err(e) => {
                 error_count += 1;
                 emit_log(format!("[ERROR] Failed to send message: {}", e));
@@ -3472,8 +3888,14 @@ pub async fn clone_messages(
         tokio::time::sleep(tokio::time::Duration::from_millis(options.delay_ms)).await;
     }
 
-    emit_log(format!("[+] Cloning completed! Sent: {}, Skipped: {}, Errors: {}", sent_count, skipped_count, error_count));
-    Ok(format!("Successfully sent {} messages ({} skipped, {} errors)", sent_count, skipped_count, error_count))
+    emit_log(format!(
+        "[+] Cloning completed! Sent: {}, Skipped: {}, Errors: {}",
+        sent_count, skipped_count, error_count
+    ));
+    Ok(format!(
+        "Successfully sent {} messages ({} skipped, {} errors)",
+        sent_count, skipped_count, error_count
+    ))
 }
 
 use std::sync::Arc;
@@ -3501,9 +3923,18 @@ pub async fn start_live_message_cloner(
     *is_running = true;
     drop(is_running);
 
-    let _ = app.emit("message-clone-log", "[+] Live message cloner started".to_string());
-    let _ = app.emit("message-clone-log", format!("[INFO] Monitoring channel: {}", source_channel_id));
-    let _ = app.emit("message-clone-log", "[INFO] Press 'Stop' to end live cloning".to_string());
+    let _ = app.emit(
+        "message-clone-log",
+        "[+] Live message cloner started".to_string(),
+    );
+    let _ = app.emit(
+        "message-clone-log",
+        format!("[INFO] Monitoring channel: {}", source_channel_id),
+    );
+    let _ = app.emit(
+        "message-clone-log",
+        "[INFO] Press 'Stop' to end live cloning".to_string(),
+    );
 
     let app_clone = app.clone();
     let client = reqwest::Client::new();
@@ -3524,16 +3955,23 @@ pub async fn start_live_message_cloner(
             }
 
             let messages_url = if let Some(ref last_id) = last_message_id {
-                format!("{}/channels/{}/messages?after={}&limit=10", base_url, source_channel_id, last_id)
+                format!(
+                    "{}/channels/{}/messages?after={}&limit=10",
+                    base_url, source_channel_id, last_id
+                )
             } else {
-                format!("{}/channels/{}/messages?limit=1", base_url, source_channel_id)
+                format!(
+                    "{}/channels/{}/messages?limit=1",
+                    base_url, source_channel_id
+                )
             };
 
             match client
                 .get(&messages_url)
                 .header("Authorization", &user_token)
                 .send()
-                .await {
+                .await
+            {
                 Ok(resp) => {
                     if resp.status().is_success() {
                         match resp.json::<Vec<Value>>().await {
@@ -3549,18 +3987,27 @@ pub async fn start_live_message_cloner(
                                     messages_to_send.reverse();
 
                                     for msg in messages_to_send {
-                                        let author_name = msg["author"]["username"].as_str().unwrap_or("Unknown");
+                                        let author_name =
+                                            msg["author"]["username"].as_str().unwrap_or("Unknown");
                                         let author_avatar = msg["author"]["avatar"].as_str();
                                         let content = msg["content"].as_str().unwrap_or("");
 
-                                        if content.is_empty() && msg["embeds"].as_array().map_or(true, |e| e.is_empty()) {
+                                        if content.is_empty()
+                                            && msg["embeds"]
+                                                .as_array()
+                                                .map_or(true, |e| e.is_empty())
+                                        {
                                             continue;
                                         }
 
                                         let avatar_url = if let Some(avatar_hash) = author_avatar {
                                             if !avatar_hash.is_empty() {
-                                                let user_id = msg["author"]["id"].as_str().unwrap_or("");
-                                                format!("https://cdn.discordapp.com/avatars/{}/{}.png", user_id, avatar_hash)
+                                                let user_id =
+                                                    msg["author"]["id"].as_str().unwrap_or("");
+                                                format!(
+                                                    "https://cdn.discordapp.com/avatars/{}/{}.png",
+                                                    user_id, avatar_hash
+                                                )
                                             } else {
                                                 String::new()
                                             }
@@ -3587,30 +4034,40 @@ pub async fn start_live_message_cloner(
                                         });
 
                                         if !avatar_url.is_empty() {
-                                            webhook_payload["avatar_url"] = Value::String(avatar_url);
+                                            webhook_payload["avatar_url"] =
+                                                Value::String(avatar_url);
                                         }
 
-                                        match client.post(&webhook_url)
+                                        match client
+                                            .post(&webhook_url)
                                             .header("Content-Type", "application/json")
                                             .json(&webhook_payload)
                                             .send()
-                                            .await {
+                                            .await
+                                        {
                                             Ok(resp) => {
                                                 if resp.status().is_success() {
-                                                    emit_log(format!("[+] Forwarded message from {}", author_name));
+                                                    emit_log(format!(
+                                                        "[+] Forwarded message from {}",
+                                                        author_name
+                                                    ));
                                                 } else {
-                                                    emit_log(format!("[WARNING] Failed to forward (Status: {})", resp.status()));
+                                                    emit_log(format!(
+                                                        "[WARNING] Failed to forward (Status: {})",
+                                                        resp.status()
+                                                    ));
                                                 }
-                                            },
+                                            }
                                             Err(e) => {
                                                 emit_log(format!("[ERROR] Send failed: {}", e));
                                             }
                                         }
 
-                                        tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+                                        tokio::time::sleep(tokio::time::Duration::from_millis(500))
+                                            .await;
                                     }
                                 }
-                            },
+                            }
                             Err(e) => {
                                 emit_log(format!("[ERROR] Failed to parse messages: {}", e));
                             }
@@ -3619,7 +4076,7 @@ pub async fn start_live_message_cloner(
                         emit_log("[WARNING] Rate limited, waiting...".to_string());
                         tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
                     }
-                },
+                }
                 Err(e) => {
                     emit_log(format!("[ERROR] Request failed: {}", e));
                 }
@@ -3670,9 +4127,10 @@ pub async fn generate_system_report() -> Result<String, String> {
     let mut cmd = Command::new("powershell");
     cmd.args([
         "-NoProfile",
-        "-ExecutionPolicy", "Bypass",
+        "-ExecutionPolicy",
+        "Bypass",
         "-Command",
-        &command
+        &command,
     ]);
 
     #[cfg(windows)]
@@ -3683,7 +4141,10 @@ pub async fn generate_system_report() -> Result<String, String> {
         .map_err(|e| format!("Failed to generate system report: {}", e))?;
 
     if output.status.success() {
-        Ok(format!("System report generated successfully at: {}", report_path))
+        Ok(format!(
+            "System report generated successfully at: {}",
+            report_path
+        ))
     } else {
         let error = String::from_utf8_lossy(&output.stderr).to_string();
         Err(format!("Failed to generate report: {}", error))
@@ -3706,7 +4167,6 @@ pub async fn open_system_info() -> Result<String, String> {
     Ok("System Information opened".to_string())
 }
 
-
 #[tauri::command]
 pub async fn spam_reactions(
     user_token: String,
@@ -3716,25 +4176,28 @@ pub async fn spam_reactions(
     delay_ms: u64,
 ) -> Result<String, String> {
     check_auth()?;
-    
+
     let user_token = validate_discord_token(&user_token)?;
     let channel_id = validate_discord_id(&channel_id)?;
     let message_id = validate_discord_id(&message_id)?;
-    
+
     if emojis.is_empty() {
         return Err("En az bir emoji gerekli".to_string());
     }
-    
+
     let client = reqwest::Client::new();
     let base_url = "https://discord.com/api/v10";
-    
+
     let mut reactions_added = 0;
-    
+
     for emoji in emojis.iter() {
         let emoji_encoded = emoji.replace(" ", "+");
-        let endpoint = format!("/channels/{}/messages/{}/reactions/{}/@me", channel_id, message_id, emoji_encoded);
+        let endpoint = format!(
+            "/channels/{}/messages/{}/reactions/{}/@me",
+            channel_id, message_id, emoji_encoded
+        );
         let url = format!("{}{}", base_url, endpoint);
-        
+
         match client
             .put(&url)
             .header("Authorization", &user_token)
@@ -3750,12 +4213,17 @@ pub async fn spam_reactions(
                     continue;
                 } else {
                     let status = resp.status();
-                    let _error_text = resp.text().await.unwrap_or_else(|_| "Bilinmeyen hata".to_string());
-                    
+                    let _error_text = resp
+                        .text()
+                        .await
+                        .unwrap_or_else(|_| "Bilinmeyen hata".to_string());
+
                     if status == 401 || status == 403 {
                         return Err("Token geçersiz veya reaction ekleme yetkiniz yok".to_string());
                     } else if status == 404 {
-                        return Err("Kanal veya mesaj bulunamadı. ID'leri kontrol edin.".to_string());
+                        return Err(
+                            "Kanal veya mesaj bulunamadı. ID'leri kontrol edin.".to_string()
+                        );
                     }
                 }
             }
@@ -3763,12 +4231,12 @@ pub async fn spam_reactions(
                 return Err(format!("Reaction ekleme hatası: {}", e));
             }
         }
-        
+
         if delay_ms > 0 {
             tokio::time::sleep(tokio::time::Duration::from_millis(delay_ms)).await;
         }
     }
-    
+
     Ok(format!("Successfully added {} reactions", reactions_added))
 }
 
@@ -3779,18 +4247,18 @@ pub async fn change_nickname(
     nickname: String,
 ) -> Result<String, String> {
     check_auth()?;
-    
+
     let user_token = validate_discord_token(&user_token)?;
     let guild_id = validate_discord_id(&guild_id)?;
-    
+
     if nickname.len() > 32 {
         return Err("Nickname çok uzun (max 32 karakter)".to_string());
     }
-    
+
     let client = reqwest::Client::new();
     let base_url = "https://discord.com/api/v10";
     let url = format!("{}/guilds/{}/members/@me", base_url, guild_id);
-    
+
     let response = client
         .patch(&url)
         .header("Authorization", &user_token)
@@ -3799,16 +4267,21 @@ pub async fn change_nickname(
         .send()
         .await
         .map_err(|e| format!("Request failed: {}", e))?;
-    
+
     if response.status().is_success() {
         Ok(format!("Nickname changed to '{}' successfully", nickname))
     } else {
         let status = response.status();
-        let error_text = response.text().await.unwrap_or_else(|_| "Bilinmeyen hata".to_string());
-        
+        let error_text = response
+            .text()
+            .await
+            .unwrap_or_else(|_| "Bilinmeyen hata".to_string());
+
         let error_msg = if status == 401 || status == 403 {
             if let Ok(error_json) = serde_json::from_str::<serde_json::Value>(&error_text) {
-                let message = error_json["message"].as_str().unwrap_or("Yetkilendirme hatası");
+                let message = error_json["message"]
+                    .as_str()
+                    .unwrap_or("Yetkilendirme hatası");
                 if message.contains("Missing Permissions") || message.contains("Missing Access") {
                     "Bu sunucuda nickname değiştirme yetkiniz yok".to_string()
                 } else {
@@ -3822,7 +4295,7 @@ pub async fn change_nickname(
         } else {
             format!("Discord API hatası ({}): {}", status, error_text)
         };
-        
+
         Err(error_msg)
     }
 }
@@ -3845,9 +4318,17 @@ pub async fn bulk_delete_messages(
         let _ = app.emit("bulk-delete-log", message);
     };
 
-    emit_log(format!("[+] Starting bulk delete in channel {}", channel_id));
+    emit_log(format!(
+        "[+] Starting bulk delete in channel {}",
+        channel_id
+    ));
 
-    let messages_url = format!("{}/channels/{}/messages?limit={}", base_url, channel_id, limit.min(100));
+    let messages_url = format!(
+        "{}/channels/{}/messages?limit={}",
+        base_url,
+        channel_id,
+        limit.min(100)
+    );
 
     match client
         .get(&messages_url)
@@ -3876,7 +4357,10 @@ pub async fn bulk_delete_messages(
                                     let current_user_id = user_json["id"].as_str().unwrap_or("");
 
                                     if author_id == current_user_id {
-                                        let delete_url = format!("{}/channels/{}/messages/{}", base_url, channel_id, msg_id);
+                                        let delete_url = format!(
+                                            "{}/channels/{}/messages/{}",
+                                            base_url, channel_id, msg_id
+                                        );
 
                                         match client
                                             .delete(&delete_url)
@@ -3885,16 +4369,25 @@ pub async fn bulk_delete_messages(
                                             .await
                                         {
                                             Ok(del_resp) => {
-                                                if del_resp.status().is_success() || del_resp.status().as_u16() == 204 {
+                                                if del_resp.status().is_success()
+                                                    || del_resp.status().as_u16() == 204
+                                                {
                                                     deleted_count += 1;
-                                                    emit_log(format!("[+] Deleted message {}/{}", deleted_count, messages.len()));
+                                                    emit_log(format!(
+                                                        "[+] Deleted message {}/{}",
+                                                        deleted_count,
+                                                        messages.len()
+                                                    ));
                                                 }
                                             }
                                             Err(_) => {}
                                         }
 
                                         if delay_ms > 0 {
-                                            tokio::time::sleep(tokio::time::Duration::from_millis(delay_ms)).await;
+                                            tokio::time::sleep(tokio::time::Duration::from_millis(
+                                                delay_ms,
+                                            ))
+                                            .await;
                                         }
                                     }
                                 }
@@ -3904,13 +4397,19 @@ pub async fn bulk_delete_messages(
                     Err(e) => return Err(format!("Failed to parse messages: {}", e)),
                 }
             } else {
-                return Err(format!("Failed to fetch messages: Status {}", resp.status()));
+                return Err(format!(
+                    "Failed to fetch messages: Status {}",
+                    resp.status()
+                ));
             }
         }
         Err(e) => return Err(format!("Request failed: {}", e)),
     }
 
-    emit_log(format!("[✓] Bulk delete complete. Deleted {} messages", deleted_count));
+    emit_log(format!(
+        "[✓] Bulk delete complete. Deleted {} messages",
+        deleted_count
+    ));
     Ok(format!("Successfully deleted {} messages", deleted_count))
 }
 
@@ -3924,27 +4423,27 @@ pub async fn dm_bomber(
     delay_ms: u64,
 ) -> Result<String, String> {
     check_auth()?;
-    
+
     let user_token = validate_discord_token(&user_token)?;
-    
+
     if user_ids.is_empty() {
         return Err("En az bir kullanıcı ID'si gerekli".to_string());
     }
-    
+
     for user_id in &user_ids {
         if let Err(e) = validate_discord_id(user_id) {
             return Err(format!("Geçersiz kullanıcı ID'si '{}': {}", user_id, e));
         }
     }
-    
+
     if message.trim().is_empty() {
         return Err("Mesaj içeriği boş olamaz".to_string());
     }
-    
+
     if count == 0 || count > 50 {
         return Err("Mesaj sayısı 1-50 arasında olmalıdır".to_string());
     }
-    
+
     use serde_json::Value;
 
     let client = reqwest::Client::new();
@@ -3962,7 +4461,7 @@ pub async fn dm_bomber(
         emit_log(format!("[INFO] Targeting user ID: {}", user_id));
 
         let user_id_trimmed = user_id.trim();
-        
+
         if user_id_trimmed.is_empty() {
             emit_log(format!("[ERROR] Boş kullanıcı ID'si atlandı"));
             continue;
@@ -3971,7 +4470,10 @@ pub async fn dm_bomber(
         let user_id_parsed = match user_id_trimmed.parse::<u64>() {
             Ok(id) => id.to_string(),
             Err(_) => {
-                emit_log(format!("[ERROR] Geçersiz kullanıcı ID formatı: {}", user_id_trimmed));
+                emit_log(format!(
+                    "[ERROR] Geçersiz kullanıcı ID formatı: {}",
+                    user_id_trimmed
+                ));
                 continue;
             }
         };
@@ -3996,13 +4498,16 @@ pub async fn dm_bomber(
                     match dm_data.json::<Value>().await {
                         Ok(dm_json) => {
                             let channel_id = dm_json["id"].as_str().unwrap_or("");
-                            
+
                             if channel_id.is_empty() {
                                 emit_log(format!("[ERROR] DM channel oluşturulamadı: Channel ID boş - User ID: {}", user_id_parsed));
                                 continue;
                             }
 
-                            emit_log(format!("[+] DM channel oluşturuldu: {} (User: {})", channel_id, user_id_parsed));
+                            emit_log(format!(
+                                "[+] DM channel oluşturuldu: {} (User: {})",
+                                channel_id, user_id_parsed
+                            ));
 
                             for i in 1..=count {
                                 let msg_payload = serde_json::json!({
@@ -4020,39 +4525,64 @@ pub async fn dm_bomber(
                                     Ok(resp) => {
                                         if resp.status().is_success() {
                                             total_sent += 1;
-                                            emit_log(format!("[+] Sent {}/{} to {}", i, count, user_id_parsed));
+                                            emit_log(format!(
+                                                "[+] Sent {}/{} to {}",
+                                                i, count, user_id_parsed
+                                            ));
                                         } else if resp.status().as_u16() == 429 {
-                                            emit_log("[WARNING] Rate limited! Waiting 5 seconds...".to_string());
-                                            tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
+                                            emit_log(
+                                                "[WARNING] Rate limited! Waiting 5 seconds..."
+                                                    .to_string(),
+                                            );
+                                            tokio::time::sleep(tokio::time::Duration::from_secs(5))
+                                                .await;
                                         } else {
                                             let status = resp.status();
-                                            let error_text = resp.text().await.unwrap_or_else(|_| "Bilinmeyen hata".to_string());
+                                            let error_text = resp
+                                                .text()
+                                                .await
+                                                .unwrap_or_else(|_| "Bilinmeyen hata".to_string());
                                             emit_log(format!("[ERROR] Mesaj gönderilemedi ({}): {} - User ID: {}", status, error_text, user_id_parsed));
                                         }
                                     }
                                     Err(e) => {
-                                        emit_log(format!("[ERROR] Mesaj gönderme hatası: {} - User ID: {}", e, user_id_parsed));
+                                        emit_log(format!(
+                                            "[ERROR] Mesaj gönderme hatası: {} - User ID: {}",
+                                            e, user_id_parsed
+                                        ));
                                     }
                                 }
 
                                 if delay_ms > 0 {
-                                    tokio::time::sleep(tokio::time::Duration::from_millis(delay_ms)).await;
+                                    tokio::time::sleep(tokio::time::Duration::from_millis(
+                                        delay_ms,
+                                    ))
+                                    .await;
                                 }
                             }
                         }
                         Err(e) => {
-                            emit_log(format!("[ERROR] DM channel yanıtı parse edilemedi: {} - User ID: {}", e, user_id_parsed));
+                            emit_log(format!(
+                                "[ERROR] DM channel yanıtı parse edilemedi: {} - User ID: {}",
+                                e, user_id_parsed
+                            ));
                         }
                     }
                 } else {
                     let status = dm_data.status();
-                    let error_text = dm_data.text().await.unwrap_or_else(|_| "Bilinmeyen hata".to_string());
-                    
+                    let error_text = dm_data
+                        .text()
+                        .await
+                        .unwrap_or_else(|_| "Bilinmeyen hata".to_string());
+
                     let error_msg = if status == 400 {
-                        if let Ok(error_json) = serde_json::from_str::<serde_json::Value>(&error_text) {
+                        if let Ok(error_json) =
+                            serde_json::from_str::<serde_json::Value>(&error_text)
+                        {
                             let code = error_json["code"].as_u64().unwrap_or(0);
-                            let message = error_json["message"].as_str().unwrap_or("Bilinmeyen hata");
-                            
+                            let message =
+                                error_json["message"].as_str().unwrap_or("Bilinmeyen hata");
+
                             if code == 50033 {
                                 format!("Alıcı geçersiz (Code 50033): Bu kullanıcı ID'si geçersiz veya kullanıcı bulunamıyor. Lütfen kullanıcı ID'sini kontrol edin.")
                             } else {
@@ -4068,18 +4598,27 @@ pub async fn dm_bomber(
                     } else {
                         format!("DM channel oluşturulamadı ({}): {}", status, error_text)
                     };
-                    
-                    emit_log(format!("[ERROR] {} - User ID: {}", error_msg, user_id_parsed));
+
+                    emit_log(format!(
+                        "[ERROR] {} - User ID: {}",
+                        error_msg, user_id_parsed
+                    ));
                 }
             }
             Err(e) => {
-                emit_log(format!("[ERROR] DM channel oluşturma isteği başarısız: {} - User ID: {}", e, user_id_parsed));
+                emit_log(format!(
+                    "[ERROR] DM channel oluşturma isteği başarısız: {} - User ID: {}",
+                    e, user_id_parsed
+                ));
             }
         }
     }
 
-    emit_log(format!("[✓] DM Bomber complete. Sent {} messages", total_sent));
-    
+    emit_log(format!(
+        "[✓] DM Bomber complete. Sent {} messages",
+        total_sent
+    ));
+
     if total_sent == 0 {
         Err("Hiçbir mesaj gönderilemedi. Tüm kullanıcılar doğrulanamadı veya DM channel oluşturulamadı. Lütfen kullanıcı ID'lerini ve token'ı kontrol edin.".to_string())
     } else {
@@ -4099,16 +4638,23 @@ pub async fn purge_channel(
     let client = reqwest::Client::new();
     let base_url = "https://discord.com/api/v10";
     let mut deleted = 0;
-    let (auth_token, current_user_id) = resolve_discord_auth(&client, base_url, &user_token).await?;
+    let (auth_token, current_user_id) =
+        resolve_discord_auth(&client, base_url, &user_token).await?;
 
     let emit_log = |msg: String| {
         let _ = app.emit("purge-log", msg);
     };
 
-    emit_log(format!("[+] Starting channel purge for {} messages", message_count));
+    emit_log(format!(
+        "[+] Starting channel purge for {} messages",
+        message_count
+    ));
 
     let batch_size = 100.min(message_count);
-    let messages_url = format!("{}/channels/{}/messages?limit={}", base_url, channel_id, batch_size);
+    let messages_url = format!(
+        "{}/channels/{}/messages?limit={}",
+        base_url, channel_id, batch_size
+    );
 
     match client
         .get(&messages_url)
@@ -4130,7 +4676,10 @@ pub async fn purge_channel(
                                 "messages": message_ids
                             });
 
-                            let delete_url = format!("{}/channels/{}/messages/bulk-delete", base_url, channel_id);
+                            let delete_url = format!(
+                                "{}/channels/{}/messages/bulk-delete",
+                                base_url, channel_id
+                            );
 
                             match client
                                 .post(&delete_url)
@@ -4141,7 +4690,9 @@ pub async fn purge_channel(
                                 .await
                             {
                                 Ok(del_resp) => {
-                                    if del_resp.status().is_success() || del_resp.status().as_u16() == 204 {
+                                    if del_resp.status().is_success()
+                                        || del_resp.status().as_u16() == 204
+                                    {
                                         deleted = message_ids.len();
                                         emit_log(format!("[✓] Purged {} messages", deleted));
                                     } else if del_resp.status().as_u16() == 403 {
@@ -4151,18 +4702,27 @@ pub async fn purge_channel(
                                         emit_log("[WARNING] Bulk delete izni yok. Sadece kendi mesajlarınız silinecek.".to_string());
                                         for msg in messages.iter() {
                                             let msg_id = msg["id"].as_str().unwrap_or("");
-                                            let author_id = msg["author"]["id"].as_str().unwrap_or("");
+                                            let author_id =
+                                                msg["author"]["id"].as_str().unwrap_or("");
                                             if author_id == current_user_id {
-                                                let delete_url = format!("{}/channels/{}/messages/{}", base_url, channel_id, msg_id);
+                                                let delete_url = format!(
+                                                    "{}/channels/{}/messages/{}",
+                                                    base_url, channel_id, msg_id
+                                                );
                                                 if let Ok(del_resp) = client
                                                     .delete(&delete_url)
                                                     .header("Authorization", &auth_token)
                                                     .send()
                                                     .await
                                                 {
-                                                    if del_resp.status().is_success() || del_resp.status().as_u16() == 204 {
+                                                    if del_resp.status().is_success()
+                                                        || del_resp.status().as_u16() == 204
+                                                    {
                                                         deleted += 1;
-                                                        emit_log(format!("[+] Deleted message {}/{}", deleted, message_count));
+                                                        emit_log(format!(
+                                                            "[+] Deleted message {}/{}",
+                                                            deleted, message_count
+                                                        ));
                                                     }
                                                 }
                                             }
@@ -4178,7 +4738,8 @@ pub async fn purge_channel(
                             }
                         } else if message_ids.len() == 1 {
                             let msg_id = &message_ids[0];
-                            let delete_url = format!("{}/channels/{}/messages/{}", base_url, channel_id, msg_id);
+                            let delete_url =
+                                format!("{}/channels/{}/messages/{}", base_url, channel_id, msg_id);
                             match client
                                 .delete(&delete_url)
                                 .header("Authorization", &auth_token)
@@ -4186,7 +4747,9 @@ pub async fn purge_channel(
                                 .await
                             {
                                 Ok(del_resp) => {
-                                    if del_resp.status().is_success() || del_resp.status().as_u16() == 204 {
+                                    if del_resp.status().is_success()
+                                        || del_resp.status().as_u16() == 204
+                                    {
                                         deleted = 1;
                                         emit_log("[✓] Purged 1 message".to_string());
                                     } else {
@@ -4234,7 +4797,9 @@ pub async fn clone_role(
             if resp.status().is_success() {
                 match resp.json::<Vec<Value>>().await {
                     Ok(roles) => {
-                        let source_role = roles.iter().find(|r| r["id"].as_str() == Some(&source_role_id));
+                        let source_role = roles
+                            .iter()
+                            .find(|r| r["id"].as_str() == Some(&source_role_id));
 
                         if let Some(role) = source_role {
                             let permissions = role["permissions"].as_str().unwrap_or("0");
@@ -4260,9 +4825,16 @@ pub async fn clone_role(
                             {
                                 Ok(create_resp) => {
                                     if create_resp.status().is_success() {
-                                        Ok(format!("Role '{}' cloned successfully as '{}'", role["name"].as_str().unwrap_or("Unknown"), new_role_name))
+                                        Ok(format!(
+                                            "Role '{}' cloned successfully as '{}'",
+                                            role["name"].as_str().unwrap_or("Unknown"),
+                                            new_role_name
+                                        ))
                                     } else {
-                                        Err(format!("Failed to create role: Status {}", create_resp.status()))
+                                        Err(format!(
+                                            "Failed to create role: Status {}",
+                                            create_resp.status()
+                                        ))
                                     }
                                 }
                                 Err(e) => Err(format!("Create request failed: {}", e)),
@@ -4284,16 +4856,16 @@ pub async fn clone_role(
 #[tauri::command]
 pub async fn check_token(user_token: String) -> Result<String, String> {
     check_auth()?;
-    
+
     let user_token = validate_discord_token(&user_token)?;
-    
+
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(30))
         .build()
         .map_err(|e| format!("Client oluşturulamadı: {}", e))?;
-    
+
     let url = "https://discord.com/api/v10/users/@me";
-    
+
     let response = client
         .get(url)
         .header("Authorization", &user_token)
@@ -4309,35 +4881,45 @@ pub async fn check_token(user_token: String) -> Result<String, String> {
                 format!("Discord API request failed: {}", e)
             }
         })?;
-    
+
     let status = response.status();
-    
+
     if status.is_success() {
-        let user_data: serde_json::Value = response.json().await
+        let user_data: serde_json::Value = response
+            .json()
+            .await
             .map_err(|e| format!("Yanıt parse edilemedi: {}", e))?;
-        
+
         let username = user_data["username"].as_str().unwrap_or("Unknown");
         let user_id = user_data["id"].as_str().unwrap_or("Unknown");
-        Ok(format!("Token geçerli - Kullanıcı: {} ({})", username, user_id))
+        Ok(format!(
+            "Token geçerli - Kullanıcı: {} ({})",
+            username, user_id
+        ))
     } else {
-        let error_text = response.text().await.unwrap_or_else(|_| "Bilinmeyen hata".to_string());
-        let error_msg = if let Ok(error_json) = serde_json::from_str::<serde_json::Value>(&error_text) {
-            let message = error_json["message"].as_str()
-                .or_else(|| error_json["error"].as_str())
-                .unwrap_or("Token kontrolü başarısız");
-            
-            if status == 401 || status == 403 {
-                "Token geçersiz veya süresi dolmuş".to_string()
+        let error_text = response
+            .text()
+            .await
+            .unwrap_or_else(|_| "Bilinmeyen hata".to_string());
+        let error_msg =
+            if let Ok(error_json) = serde_json::from_str::<serde_json::Value>(&error_text) {
+                let message = error_json["message"]
+                    .as_str()
+                    .or_else(|| error_json["error"].as_str())
+                    .unwrap_or("Token kontrolü başarısız");
+
+                if status == 401 || status == 403 {
+                    "Token geçersiz veya süresi dolmuş".to_string()
+                } else {
+                    format!("Discord API hatası: {}", message)
+                }
             } else {
-                format!("Discord API hatası: {}", message)
-            }
-        } else {
-            if status == 401 || status == 403 {
-                "Token geçersiz veya süresi dolmuş".to_string()
-            } else {
-                format!("Discord API hatası ({}): {}", status, error_text)
-            }
-        };
+                if status == 401 || status == 403 {
+                    "Token geçersiz veya süresi dolmuş".to_string()
+                } else {
+                    format!("Discord API hatası ({}): {}", status, error_text)
+                }
+            };
         Err(error_msg)
     }
 }
@@ -4345,16 +4927,16 @@ pub async fn check_token(user_token: String) -> Result<String, String> {
 #[tauri::command]
 pub async fn get_token_info(user_token: String) -> Result<String, String> {
     check_auth()?;
-    
+
     let user_token = validate_discord_token(&user_token)?;
-    
+
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(30))
         .build()
         .map_err(|e| format!("Client oluşturulamadı: {}", e))?;
-    
+
     let url = "https://discord.com/api/v10/users/@me";
-    
+
     let response = client
         .get(url)
         .header("Authorization", &user_token)
@@ -4370,27 +4952,34 @@ pub async fn get_token_info(user_token: String) -> Result<String, String> {
                 format!("Discord API request failed: {}", e)
             }
         })?;
-    
+
     let status = response.status();
-    
+
     if status.is_success() {
-        let info: serde_json::Value = response.json().await
+        let info: serde_json::Value = response
+            .json()
+            .await
             .map_err(|e| format!("Yanıt parse edilemedi: {}", e))?;
         Ok(info.to_string())
     } else {
-        let error_text = response.text().await.unwrap_or_else(|_| "Bilinmeyen hata".to_string());
-        let error_msg = if let Ok(error_json) = serde_json::from_str::<serde_json::Value>(&error_text) {
-            error_json["message"].as_str()
-                .or_else(|| error_json["error"].as_str())
-                .unwrap_or("Token bilgisi alınamadı")
-                .to_string()
-        } else {
-            if status == 401 {
-                "Token geçersiz veya süresi dolmuş".to_string()
+        let error_text = response
+            .text()
+            .await
+            .unwrap_or_else(|_| "Bilinmeyen hata".to_string());
+        let error_msg =
+            if let Ok(error_json) = serde_json::from_str::<serde_json::Value>(&error_text) {
+                error_json["message"]
+                    .as_str()
+                    .or_else(|| error_json["error"].as_str())
+                    .unwrap_or("Token bilgisi alınamadı")
+                    .to_string()
             } else {
-                format!("Discord API hatası ({}): {}", status, error_text)
-            }
-        };
+                if status == 401 {
+                    "Token geçersiz veya süresi dolmuş".to_string()
+                } else {
+                    format!("Discord API hatası ({}): {}", status, error_text)
+                }
+            };
         Err(error_msg)
     }
 }
@@ -4425,7 +5014,10 @@ pub async fn spam_webhook(
             let is_running = WEBHOOK_SPAM_RUNNING.lock().await;
             if !*is_running {
                 emit_log("[!] Webhook spam cancelled by user".to_string());
-                return Ok(format!("Webhook spam stopped. Sent {}/{} messages", sent_count, count));
+                return Ok(format!(
+                    "Webhook spam stopped. Sent {}/{} messages",
+                    sent_count, count
+                ));
             }
         }
         let mut payload = serde_json::json!({
@@ -4470,8 +5062,14 @@ pub async fn spam_webhook(
         *is_running = false;
     }
 
-    emit_log(format!("[✓] Webhook spam complete. Sent {} messages", sent_count));
-    Ok(format!("Successfully sent {} messages via webhook", sent_count))
+    emit_log(format!(
+        "[✓] Webhook spam complete. Sent {} messages",
+        sent_count
+    ));
+    Ok(format!(
+        "Successfully sent {} messages via webhook",
+        sent_count
+    ))
 }
 
 #[tauri::command]
@@ -4485,16 +5083,15 @@ pub async fn stop_webhook_spam() -> Result<String, String> {
 pub async fn delete_webhook(webhook_url: String) -> Result<String, String> {
     let client = reqwest::Client::new();
 
-    match client
-        .delete(&webhook_url)
-        .send()
-        .await
-    {
+    match client.delete(&webhook_url).send().await {
         Ok(resp) => {
             if resp.status().is_success() || resp.status().as_u16() == 204 {
                 Ok("Webhook deleted successfully".to_string())
             } else {
-                Err(format!("Failed to delete webhook: Status {}", resp.status()))
+                Err(format!(
+                    "Failed to delete webhook: Status {}",
+                    resp.status()
+                ))
             }
         }
         Err(e) => Err(format!("Request failed: {}", e)),
@@ -4523,20 +5120,21 @@ pub async fn backup_guild(
     emit_log("[INFO] Starting server backup...".to_string());
     emit_log("[WARNING] This may violate Discord Terms of Service!".to_string());
 
-    let opts: Value = serde_json::from_str(&options)
-        .unwrap_or_else(|_| serde_json::json!({
+    let opts: Value = serde_json::from_str(&options).unwrap_or_else(|_| {
+        serde_json::json!({
             "includeChannels": true,
             "includeRoles": true,
             "includeEmojis": true,
             "includeSettings": true,
             "includePermissions": true
-        }));
+        })
+    });
 
     let mut backup_data = serde_json::json!({});
 
     emit_log("[+] Fetching guild information...".to_string());
     let guild_url = format!("{}/guilds/{}", base_url, guild_id);
-    
+
     match client
         .get(&guild_url)
         .header("Authorization", &user_token)
@@ -4561,7 +5159,13 @@ pub async fn backup_guild(
                             "afk_channel_id": guild.get("afk_channel_id"),
                             "system_channel_id": guild.get("system_channel_id"),
                         });
-                        emit_log(format!("[✓] Guild: {}", guild.get("name").and_then(|v| v.as_str()).unwrap_or("Unknown")));
+                        emit_log(format!(
+                            "[✓] Guild: {}",
+                            guild
+                                .get("name")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("Unknown")
+                        ));
                     }
                     Err(e) => return Err(format!("Failed to parse guild data: {}", e)),
                 }
@@ -4575,7 +5179,7 @@ pub async fn backup_guild(
     if opts["includeChannels"].as_bool().unwrap_or(true) {
         emit_log("[+] Fetching channels...".to_string());
         let channels_url = format!("{}/guilds/{}/channels", base_url, guild_id);
-        
+
         match client
             .get(&channels_url)
             .header("Authorization", &user_token)
@@ -4602,7 +5206,7 @@ pub async fn backup_guild(
     if opts["includeRoles"].as_bool().unwrap_or(true) {
         emit_log("[+] Fetching roles...".to_string());
         let roles_url = format!("{}/guilds/{}/roles", base_url, guild_id);
-        
+
         match client
             .get(&roles_url)
             .header("Authorization", &user_token)
@@ -4629,7 +5233,7 @@ pub async fn backup_guild(
     if opts["includeEmojis"].as_bool().unwrap_or(true) {
         emit_log("[+] Fetching emojis...".to_string());
         let emojis_url = format!("{}/guilds/{}/emojis", base_url, guild_id);
-        
+
         match client
             .get(&emojis_url)
             .header("Authorization", &user_token)
@@ -4664,14 +5268,16 @@ pub async fn backup_guild(
 
     let json_data = serde_json::to_string_pretty(&backup_data)
         .map_err(|e| format!("Failed to serialize JSON: {}", e))?;
-    
-    let mut file = File::create(&filename)
-        .map_err(|e| format!("Failed to create file: {}", e))?;
+
+    let mut file = File::create(&filename).map_err(|e| format!("Failed to create file: {}", e))?;
     file.write_all(json_data.as_bytes())
         .map_err(|e| format!("Failed to write file: {}", e))?;
 
     emit_log(format!("[✓] Backup saved to: {}", filename));
-    Ok(format!("Server backup completed successfully. Saved to: {}", filename))
+    Ok(format!(
+        "Server backup completed successfully. Saved to: {}",
+        filename
+    ))
 }
 
 #[tauri::command]
@@ -4696,9 +5302,9 @@ pub async fn restore_guild(
     emit_log("[INFO] Starting server restore...".to_string());
     emit_log("[WARNING] This will overwrite current server settings!".to_string());
 
-    let mut file = File::open(&backup_path)
-        .map_err(|e| format!("Failed to open backup file: {}", e))?;
-    
+    let mut file =
+        File::open(&backup_path).map_err(|e| format!("Failed to open backup file: {}", e))?;
+
     let mut contents = String::new();
     file.read_to_string(&mut contents)
         .map_err(|e| format!("Failed to read backup file: {}", e))?;
@@ -4710,7 +5316,7 @@ pub async fn restore_guild(
 
     if let Some(guild_info) = backup_data.get("guild_info") {
         emit_log("[+] Restoring guild settings...".to_string());
-        
+
         let update_payload = serde_json::json!({
             "name": guild_info.get("name"),
             "description": guild_info.get("description"),
@@ -4732,7 +5338,10 @@ pub async fn restore_guild(
                 if resp.status().is_success() {
                     emit_log("[✓] Guild settings restored".to_string());
                 } else {
-                    emit_log(format!("[WARNING] Failed to restore guild settings: Status {}", resp.status()));
+                    emit_log(format!(
+                        "[WARNING] Failed to restore guild settings: Status {}",
+                        resp.status()
+                    ));
                 }
             }
             Err(e) => emit_log(format!("[WARNING] Failed to update guild: {}", e)),
@@ -4747,10 +5356,7 @@ pub async fn restore_guild(
 }
 
 #[tauri::command]
-pub async fn change_hypesquad_house(
-    user_token: String,
-    house: String,
-) -> Result<String, String> {
+pub async fn change_hypesquad_house(user_token: String, house: String) -> Result<String, String> {
     check_auth()?;
     let client = reqwest::Client::new();
     let base_url = "https://discord.com/api/v10";
@@ -4778,9 +5384,15 @@ pub async fn change_hypesquad_house(
     {
         Ok(resp) => {
             if resp.status().is_success() || resp.status().as_u16() == 204 {
-                Ok(format!("Successfully joined Hypesquad {}!", house.to_uppercase()))
+                Ok(format!(
+                    "Successfully joined Hypesquad {}!",
+                    house.to_uppercase()
+                ))
             } else {
-                Err(format!("Failed to change Hypesquad house: Status {}", resp.status()))
+                Err(format!(
+                    "Failed to change Hypesquad house: Status {}",
+                    resp.status()
+                ))
             }
         }
         Err(e) => Err(format!("Request failed: {}", e)),
@@ -4805,13 +5417,15 @@ pub async fn leave_hypesquad(user_token: String) -> Result<String, String> {
             if resp.status().is_success() || resp.status().as_u16() == 204 {
                 Ok("Successfully left Hypesquad!".to_string())
             } else {
-                Err(format!("Failed to leave Hypesquad: Status {}", resp.status()))
+                Err(format!(
+                    "Failed to leave Hypesquad: Status {}",
+                    resp.status()
+                ))
             }
         }
         Err(e) => Err(format!("Request failed: {}", e)),
     }
 }
-
 
 use crate::anti_debug;
 
@@ -4855,7 +5469,6 @@ pub async fn terminate_if_debugged() -> Result<(), String> {
     Ok(())
 }
 
-
 use crate::hwid;
 
 #[tauri::command]
@@ -4874,9 +5487,8 @@ pub async fn verify_hwid(stored_hwid: String) -> Result<bool, String> {
     hwid::verify_hwid(&stored_hwid)
 }
 
-
-use serde::{Deserialize, Serialize};
 use chrono::Utc;
+use serde::{Deserialize, Serialize};
 use sysinfo::System;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -4884,7 +5496,7 @@ pub struct SessionFingerprint {
     pub hwid: String,
     pub app_version: String,
     pub stable_device_id: String,
-    
+
     pub os_info: String,
     pub os_version: String,
     pub os_arch: String,
@@ -4897,31 +5509,29 @@ pub async fn get_session_fingerprint() -> Result<SessionFingerprint, String> {
     let hw_info = hwid::get_hardware_info()?;
     let binary_hash = get_binary_hash().await?;
     let app_version = env!("CARGO_PKG_VERSION").to_string();
-    
-    use sha2::{Sha256, Digest};
-    let stable_id_input = format!("{}-{}-{}-{}", 
-        hw_info.hwid, 
-        hw_info.mac_address,
-        hw_info.cpu_id,
-        hw_info.disk_serial
+
+    use sha2::{Digest, Sha256};
+    let stable_id_input = format!(
+        "{}-{}-{}-{}",
+        hw_info.hwid, hw_info.mac_address, hw_info.cpu_id, hw_info.disk_serial
     );
     let mut hasher = Sha256::new();
     hasher.update(stable_id_input.as_bytes());
     let stable_device_id = format!("{:x}", hasher.finalize());
-    
+
     let os_info = hw_info.os_info.clone();
     let mut sys = System::new();
     sys.refresh_all();
     let os_version = System::os_version().unwrap_or_else(|| "Unknown".to_string());
     let os_arch = System::cpu_arch().unwrap_or_else(|| "Unknown".to_string());
-    
+
     let first_login = Utc::now().timestamp();
-    
+
     Ok(SessionFingerprint {
         hwid: hw_info.hwid,
         app_version,
         stable_device_id,
-        
+
         os_info,
         os_version,
         os_arch,
@@ -4930,11 +5540,10 @@ pub async fn get_session_fingerprint() -> Result<SessionFingerprint, String> {
     })
 }
 
-
 use discord_rich_presence::{activity, DiscordIpc, DiscordIpcClient};
 use rand::Rng;
 use std::fs::{self, OpenOptions};
-use std::io::{Write, Seek, SeekFrom};
+use std::io::{Seek, SeekFrom, Write};
 use std::path::Path;
 
 lazy_static::lazy_static! {
@@ -4960,7 +5569,7 @@ pub async fn get_wifi_passwords() -> Result<String, String> {
         .args(["wlan", "show", "profiles"])
         .output()
         .map_err(|e| format!("Failed to execute netsh: {}", e))?;
-    
+
     let output = String::from_utf8_lossy(&profiles_cmd.stdout);
     let mut profiles = Vec::new();
 
@@ -4975,7 +5584,13 @@ pub async fn get_wifi_passwords() -> Result<String, String> {
 
     for profile in profiles {
         let pass_cmd = Command::new("netsh")
-            .args(["wlan", "show", "profile", &format!("name=\"{}\"", profile), "key=clear"])
+            .args([
+                "wlan",
+                "show",
+                "profile",
+                &format!("name=\"{}\"", profile),
+                "key=clear",
+            ])
             .output();
 
         if let Ok(output) = pass_cmd {
@@ -4997,7 +5612,7 @@ pub async fn get_wifi_passwords() -> Result<String, String> {
                     }
                 }
             }
-            
+
             network_list.push(NetworkInfo {
                 name: profile.clone(),
                 password,
@@ -5019,7 +5634,9 @@ pub async fn get_wifi_passwords() -> Result<String, String> {
         let mut ethernet_interfaces = Vec::new();
 
         for line in interface_output.lines() {
-            if line.contains("Connected") && (line.contains("Ethernet") || line.contains("Local Area Connection")) {
+            if line.contains("Connected")
+                && (line.contains("Ethernet") || line.contains("Local Area Connection"))
+            {
                 let parts: Vec<&str> = line.split_whitespace().collect();
                 if parts.len() >= 4 {
                     let interface_name = parts[3..].join(" ");
@@ -5031,9 +5648,7 @@ pub async fn get_wifi_passwords() -> Result<String, String> {
         }
 
         for interface_name in ethernet_interfaces {
-            let ipconfig_cmd = Command::new("ipconfig")
-                .args(["/all"])
-                .output();
+            let ipconfig_cmd = Command::new("ipconfig").args(["/all"]).output();
 
             let mut ip_address = String::new();
             let mut dns_servers = String::new();
@@ -5043,32 +5658,41 @@ pub async fn get_wifi_passwords() -> Result<String, String> {
             if let Ok(ipconfig_output) = ipconfig_cmd {
                 let ipconfig_text = String::from_utf8_lossy(&ipconfig_output.stdout);
                 let lines: Vec<&str> = ipconfig_text.lines().collect();
-                
+
                 for (i, line) in lines.iter().enumerate() {
                     if line.contains(&interface_name) {
                         found_interface = true;
                     }
-                    
+
                     if found_interface {
                         if line.contains("IPv4 Address") || line.contains("IPv4 Adresi") {
                             let parts: Vec<&str> = line.split(':').collect();
                             if parts.len() > 1 {
-                                ip_address = parts[1].trim().to_string().replace("(Preferred)", "").trim().to_string();
+                                ip_address = parts[1]
+                                    .trim()
+                                    .to_string()
+                                    .replace("(Preferred)", "")
+                                    .trim()
+                                    .to_string();
                             }
                         }
-                        
-                        if line.contains("Default Gateway") || line.contains("Varsayılan Ağ Geçidi") {
+
+                        if line.contains("Default Gateway") || line.contains("Varsayılan Ağ Geçidi")
+                        {
                             let parts: Vec<&str> = line.split(':').collect();
                             if parts.len() > 1 {
                                 gateway = parts[1].trim().to_string();
                             }
                         }
-                        
+
                         if line.contains("DNS Servers") || line.contains("DNS Sunucuları") {
                             let mut dns_list = Vec::new();
-                            for j in (i+1)..lines.len() {
+                            for j in (i + 1)..lines.len() {
                                 let dns_line = lines[j].trim();
-                                if dns_line.is_empty() || dns_line.starts_with("Description") || dns_line.starts_with("Açıklama") {
+                                if dns_line.is_empty()
+                                    || dns_line.starts_with("Description")
+                                    || dns_line.starts_with("Açıklama")
+                                {
                                     break;
                                 }
                                 if !dns_line.starts_with(".") && !dns_line.contains(":") {
@@ -5077,7 +5701,7 @@ pub async fn get_wifi_passwords() -> Result<String, String> {
                             }
                             dns_servers = dns_list.join(", ");
                         }
-                        
+
                         if line.trim().is_empty() && !ip_address.is_empty() {
                             break;
                         }
@@ -5091,9 +5715,21 @@ pub async fn get_wifi_passwords() -> Result<String, String> {
                     password: "N/A (Ethernet)".to_string(),
                     auth_type: "Wired Connection".to_string(),
                     connection_type: "Ethernet".to_string(),
-                    ip_address: if ip_address.is_empty() { "DHCP".to_string() } else { ip_address },
-                    dns_servers: if dns_servers.is_empty() { "DHCP".to_string() } else { dns_servers },
-                    gateway: if gateway.is_empty() { "N/A".to_string() } else { gateway },
+                    ip_address: if ip_address.is_empty() {
+                        "DHCP".to_string()
+                    } else {
+                        ip_address
+                    },
+                    dns_servers: if dns_servers.is_empty() {
+                        "DHCP".to_string()
+                    } else {
+                        dns_servers
+                    },
+                    gateway: if gateway.is_empty() {
+                        "N/A".to_string()
+                    } else {
+                        gateway
+                    },
                 });
             }
         }
@@ -5126,7 +5762,7 @@ pub async fn get_connected_devices() -> Result<String, String> {
         if parts.len() >= 3 {
             let ip = parts[0].to_string();
             let mac = parts[1].to_string();
-            
+
             if mac != "ff-ff-ff-ff-ff-ff" && !mac.starts_with("ff:ff:ff") && mac.contains("-") {
                 let hostname = if parts.len() > 2 {
                     parts[2..].join(" ")
@@ -5134,7 +5770,10 @@ pub async fn get_connected_devices() -> Result<String, String> {
                     "Unknown".to_string()
                 };
 
-                let device_type = if mac.starts_with("00-50-56") || mac.starts_with("00-0c-29") || mac.starts_with("00-05-69") {
+                let device_type = if mac.starts_with("00-50-56")
+                    || mac.starts_with("00-0c-29")
+                    || mac.starts_with("00-05-69")
+                {
                     "Virtual Machine".to_string()
                 } else if mac.starts_with("00-1b-44") || mac.starts_with("00-1e-c2") {
                     "Router/Gateway".to_string()
@@ -5219,14 +5858,19 @@ pub async fn get_active_connections() -> Result<String, String> {
                         .to_string(),
                     )
                     .await;
-                    
+
                     let mut ip_address = String::new();
                     if let Ok(ipconfig_text) = ipconfig_cmd {
                         for ip_line in ipconfig_text.lines() {
                             if ip_line.contains("IPv4 Address") || ip_line.contains("IPv4 Adresi") {
                                 let parts: Vec<&str> = ip_line.split(':').collect();
                                 if parts.len() > 1 {
-                                    ip_address = parts[1].trim().to_string().replace("(Preferred)", "").trim().to_string();
+                                    ip_address = parts[1]
+                                        .trim()
+                                        .to_string()
+                                        .replace("(Preferred)", "")
+                                        .trim()
+                                        .to_string();
                                     break;
                                 }
                             }
@@ -5234,10 +5878,18 @@ pub async fn get_active_connections() -> Result<String, String> {
                     }
 
                     connections.push(ActiveConnection {
-                        name: if current_name.is_empty() { "WiFi Adapter".to_string() } else { current_name.clone() },
+                        name: if current_name.is_empty() {
+                            "WiFi Adapter".to_string()
+                        } else {
+                            current_name.clone()
+                        },
                         connection_type: "WiFi".to_string(),
                         status: "Connected".to_string(),
-                        ip_address: if ip_address.is_empty() { "DHCP".to_string() } else { ip_address },
+                        ip_address: if ip_address.is_empty() {
+                            "DHCP".to_string()
+                        } else {
+                            ip_address
+                        },
                         ssid: current_ssid.clone(),
                         signal_strength: current_signal.clone(),
                     });
@@ -5259,11 +5911,13 @@ pub async fn get_active_connections() -> Result<String, String> {
 
     if let Ok(ethernet_output) = ethernet_cmd {
         for line in ethernet_output.lines() {
-            if line.contains("Connected") && (line.contains("Ethernet") || line.contains("Local Area Connection")) {
+            if line.contains("Connected")
+                && (line.contains("Ethernet") || line.contains("Local Area Connection"))
+            {
                 let parts: Vec<&str> = line.split_whitespace().collect();
                 if parts.len() >= 4 {
                     let interface_name = parts[3..].join(" ");
-                    
+
                     let ipconfig_cmd = run_powershell(
                         r#"
                         [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
@@ -5274,7 +5928,7 @@ pub async fn get_active_connections() -> Result<String, String> {
                         .to_string(),
                     )
                     .await;
-                    
+
                     let mut ip_address = String::new();
                     if let Ok(ipconfig_text) = ipconfig_cmd {
                         let mut found_interface = false;
@@ -5282,10 +5936,18 @@ pub async fn get_active_connections() -> Result<String, String> {
                             if ip_line.contains(&interface_name) {
                                 found_interface = true;
                             }
-                            if found_interface && (ip_line.contains("IPv4 Address") || ip_line.contains("IPv4 Adresi")) {
+                            if found_interface
+                                && (ip_line.contains("IPv4 Address")
+                                    || ip_line.contains("IPv4 Adresi"))
+                            {
                                 let parts: Vec<&str> = ip_line.split(':').collect();
                                 if parts.len() > 1 {
-                                    ip_address = parts[1].trim().to_string().replace("(Preferred)", "").trim().to_string();
+                                    ip_address = parts[1]
+                                        .trim()
+                                        .to_string()
+                                        .replace("(Preferred)", "")
+                                        .trim()
+                                        .to_string();
                                     break;
                                 }
                             }
@@ -5296,7 +5958,11 @@ pub async fn get_active_connections() -> Result<String, String> {
                         name: interface_name,
                         connection_type: "Ethernet".to_string(),
                         status: "Connected".to_string(),
-                        ip_address: if ip_address.is_empty() { "DHCP".to_string() } else { ip_address },
+                        ip_address: if ip_address.is_empty() {
+                            "DHCP".to_string()
+                        } else {
+                            ip_address
+                        },
                         ssid: "N/A".to_string(),
                         signal_strength: "N/A".to_string(),
                     });
@@ -5313,13 +5979,16 @@ pub async fn get_active_connections() -> Result<String, String> {
 }
 
 #[tauri::command]
-pub async fn disconnect_network(connection_name: String, connection_type: String) -> Result<String, String> {
+pub async fn disconnect_network(
+    connection_name: String,
+    connection_type: String,
+) -> Result<String, String> {
     if connection_type == "WiFi" {
         let cmd = Command::new("netsh")
             .args(["wlan", "disconnect"])
             .output()
             .map_err(|e| format!("Failed to disconnect WiFi: {}", e))?;
-        
+
         if cmd.status.success() {
             Ok("WiFi disconnected successfully".to_string())
         } else {
@@ -5327,12 +5996,21 @@ pub async fn disconnect_network(connection_name: String, connection_type: String
         }
     } else if connection_type == "Ethernet" {
         let cmd = Command::new("netsh")
-            .args(["interface", "set", "interface", &format!("name=\"{}\"", connection_name), "admin=disable"])
+            .args([
+                "interface",
+                "set",
+                "interface",
+                &format!("name=\"{}\"", connection_name),
+                "admin=disable",
+            ])
             .output()
             .map_err(|e| format!("Failed to disconnect Ethernet: {}", e))?;
-        
+
         if cmd.status.success() {
-            Ok(format!("Ethernet interface {} disabled successfully", connection_name))
+            Ok(format!(
+                "Ethernet interface {} disabled successfully",
+                connection_name
+            ))
         } else {
             Err("Failed to disconnect Ethernet".to_string())
         }
@@ -5416,7 +6094,11 @@ pub async fn get_router_info() -> Result<String, String> {
 
     let router_info = RouterInfo {
         gateway_ip,
-        router_mac: if router_mac.is_empty() { "N/A".to_string() } else { router_mac },
+        router_mac: if router_mac.is_empty() {
+            "N/A".to_string()
+        } else {
+            router_mac
+        },
         router_brand,
         admin_url,
     };
@@ -5427,10 +6109,10 @@ pub async fn get_router_info() -> Result<String, String> {
 #[tauri::command]
 pub async fn secure_delete_file(file_path: String) -> Result<String, String> {
     check_auth()?;
-    
+
     let validated_path = validate_file_path(&file_path)?;
     let path = Path::new(&validated_path);
-    
+
     if !path.exists() {
         return Err("File not found".to_string());
     }
@@ -5446,14 +6128,15 @@ pub async fn secure_delete_file(file_path: String) -> Result<String, String> {
     let mut rng = rand::thread_rng();
     let buffer_size = 4096;
     let mut buffer = vec![0u8; buffer_size];
-    
+
     for _pass in 1..=3 {
         file.seek(SeekFrom::Start(0)).map_err(|e| e.to_string())?;
         let mut written = 0;
         while written < len {
             rng.fill(&mut buffer[..]);
             let to_write = std::cmp::min(buffer_size as u64, len - written) as usize;
-            file.write_all(&buffer[..to_write]).map_err(|e| e.to_string())?;
+            file.write_all(&buffer[..to_write])
+                .map_err(|e| e.to_string())?;
             written += to_write as u64;
         }
         file.sync_all().map_err(|e| e.to_string())?;
@@ -5464,7 +6147,8 @@ pub async fn secure_delete_file(file_path: String) -> Result<String, String> {
     let mut written = 0;
     while written < len {
         let to_write = std::cmp::min(buffer_size as u64, len - written) as usize;
-        file.write_all(&zeros[..to_write]).map_err(|e| e.to_string())?;
+        file.write_all(&zeros[..to_write])
+            .map_err(|e| e.to_string())?;
         written += to_write as u64;
     }
     file.sync_all().map_err(|e| e.to_string())?;
@@ -5486,7 +6170,9 @@ pub async fn set_discord_rpc(
     button_url: String,
     app_id: Option<String>,
 ) -> Result<String, String> {
-    let mut client_guard = DISCORD_RPC.lock().map_err(|_| "Failed to lock RPC client")?;
+    let mut client_guard = DISCORD_RPC
+        .lock()
+        .map_err(|_| "Failed to lock RPC client")?;
 
     if client_guard.is_none() {
         let chosen_app_id = app_id
@@ -5495,40 +6181,54 @@ pub async fn set_discord_rpc(
 
         let mut client = DiscordIpcClient::new(&chosen_app_id)
             .map_err(|e| format!("Failed to create RPC client: {}", e))?;
-        
-        client.connect().map_err(|e| format!("Failed to connect to Discord: {}", e))?;
+
+        client
+            .connect()
+            .map_err(|e| format!("Failed to connect to Discord: {}", e))?;
         *client_guard = Some(client);
     }
 
     if let Some(client) = client_guard.as_mut() {
         let mut activity = activity::Activity::new();
-        
-        if !state.is_empty() { activity = activity.state(&state); }
-        if !details.is_empty() { activity = activity.details(&details); }
-        
+
+        if !state.is_empty() {
+            activity = activity.state(&state);
+        }
+        if !details.is_empty() {
+            activity = activity.details(&details);
+        }
+
         let mut assets = activity::Assets::new();
         let mut has_assets = false;
-        
-        if !large_image_key.is_empty() { 
+
+        if !large_image_key.is_empty() {
             assets = assets.large_image(&large_image_key);
-            if !large_image_text.is_empty() { assets = assets.large_text(&large_image_text); }
+            if !large_image_text.is_empty() {
+                assets = assets.large_text(&large_image_text);
+            }
             has_assets = true;
         }
-        
-        if !small_image_key.is_empty() { 
+
+        if !small_image_key.is_empty() {
             assets = assets.small_image(&small_image_key);
-            if !small_image_text.is_empty() { assets = assets.small_text(&small_image_text); }
+            if !small_image_text.is_empty() {
+                assets = assets.small_text(&small_image_text);
+            }
             has_assets = true;
         }
-        
-        if has_assets { activity = activity.assets(assets); }
+
+        if has_assets {
+            activity = activity.assets(assets);
+        }
 
         if !button_label.is_empty() && !button_url.is_empty() {
-             let buttons = vec![activity::Button::new(&button_label, &button_url)];
-             activity = activity.buttons(buttons);
+            let buttons = vec![activity::Button::new(&button_label, &button_url)];
+            activity = activity.buttons(buttons);
         }
 
-        client.set_activity(activity).map_err(|e| format!("Failed to set activity: {}", e))?;
+        client
+            .set_activity(activity)
+            .map_err(|e| format!("Failed to set activity: {}", e))?;
         Ok("RPC status updated".to_string())
     } else {
         Err("RPC client not initialized".to_string())
@@ -5537,10 +6237,14 @@ pub async fn set_discord_rpc(
 
 #[tauri::command]
 pub async fn clear_discord_rpc() -> Result<String, String> {
-    let mut client_guard = DISCORD_RPC.lock().map_err(|_| "Failed to lock RPC client")?;
-    
+    let mut client_guard = DISCORD_RPC
+        .lock()
+        .map_err(|_| "Failed to lock RPC client")?;
+
     if let Some(client) = client_guard.as_mut() {
-        client.clear_activity().map_err(|e| format!("Failed to clear activity: {}", e))?;
+        client
+            .clear_activity()
+            .map_err(|e| format!("Failed to clear activity: {}", e))?;
         Ok("RPC status cleared".to_string())
     } else {
         Ok("RPC was not active".to_string())
@@ -5553,19 +6257,31 @@ pub fn force_exit() {
 }
 #[tauri::command]
 pub async fn check_online_status() -> Result<bool, String> {
+    use obfstr::obfstr;
     use std::net::TcpStream;
     use std::time::Duration;
-    use obfstr::obfstr;
 
     let check = tokio::task::spawn_blocking(|| {
-        if TcpStream::connect_timeout(&obfstr!("8.8.8.8:53").parse().unwrap(), Duration::from_secs(2)).is_ok() {
+        if TcpStream::connect_timeout(
+            &obfstr!("8.8.8.8:53").parse().unwrap(),
+            Duration::from_secs(2),
+        )
+        .is_ok()
+        {
             return true;
         }
-        if TcpStream::connect_timeout(&obfstr!("1.1.1.1:53").parse().unwrap(), Duration::from_secs(2)).is_ok() {
+        if TcpStream::connect_timeout(
+            &obfstr!("1.1.1.1:53").parse().unwrap(),
+            Duration::from_secs(2),
+        )
+        .is_ok()
+        {
             return true;
         }
         false
-    }).await.map_err(|e| format!("Online check task failed: {}", e))?;
+    })
+    .await
+    .map_err(|e| format!("Online check task failed: {}", e))?;
 
     Ok(check)
 }
