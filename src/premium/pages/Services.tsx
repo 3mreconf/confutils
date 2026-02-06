@@ -12,8 +12,10 @@ import {
   Shield,
   Database,
   Wifi,
-  Monitor
+  Monitor,
+  RefreshCw
 } from 'lucide-react';
+import { invoke } from '@tauri-apps/api/core';
 import { useI18n } from '../../i18n/I18nContext';
 
 interface ServicesProps {
@@ -166,13 +168,15 @@ const ServiceRow = ({
   onStart,
   onStop,
   onRestart,
-  onChangeStartup
+  onChangeStartup,
+  isProcessing = false
 }: {
   service: Service;
   onStart: () => void;
   onStop: () => void;
   onRestart: () => void;
   onChangeStartup: (type: Service['startupType']) => void;
+  isProcessing?: boolean;
 }) => {
   const { t } = useI18n();
   const [showDropdown, setShowDropdown] = useState(false);
@@ -288,15 +292,15 @@ const ServiceRow = ({
         <button
           className="btn btn-icon"
           onClick={onStart}
-          disabled={service.status === 'running'}
+          disabled={service.status === 'running' || isProcessing}
           title={t('start')}
         >
-          <Play size={14} />
+          {isProcessing ? <RefreshCw size={14} className="spin" /> : <Play size={14} />}
         </button>
         <button
           className="btn btn-icon"
           onClick={onStop}
-          disabled={service.status === 'stopped' || !service.canDisable}
+          disabled={service.status === 'stopped' || !service.canDisable || isProcessing}
           title={t('stop')}
         >
           <Square size={14} />
@@ -304,7 +308,7 @@ const ServiceRow = ({
         <button
           className="btn btn-icon"
           onClick={onRestart}
-          disabled={service.status === 'stopped'}
+          disabled={service.status === 'stopped' || isProcessing}
           title={t('restart')}
         >
           <RotateCcw size={14} />
@@ -352,30 +356,72 @@ export default function Services({ showToast }: ServicesProps) {
     total: services.length
   }), [services]);
 
-  const handleStart = (id: string) => {
-    setServices(prev => prev.map(s => s.id === id ? { ...s, status: 'running' as const } : s));
+  const [processing, setProcessing] = useState<Record<string, boolean>>({});
+
+  const handleStart = async (id: string) => {
     const service = services.find(s => s.id === id);
-    showToast('success', t('service_started'), `${service?.displayName} ${t('service_now_running')}`);
+    if (!service) return;
+
+    setProcessing(prev => ({ ...prev, [id]: true }));
+    try {
+      await invoke('run_powershell', { command: `Start-Service -Name "${service.name}" -ErrorAction Stop` });
+      setServices(prev => prev.map(s => s.id === id ? { ...s, status: 'running' as const } : s));
+      showToast('success', t('service_started'), `${service.displayName} ${t('service_now_running')}`);
+    } catch (error) {
+      showToast('error', t('service_error'), String(error));
+    } finally {
+      setProcessing(prev => ({ ...prev, [id]: false }));
+    }
   };
 
-  const handleStop = (id: string) => {
-    setServices(prev => prev.map(s => s.id === id ? { ...s, status: 'stopped' as const } : s));
+  const handleStop = async (id: string) => {
     const service = services.find(s => s.id === id);
-    showToast('info', t('service_stopped'), `${service?.displayName} ${t('service_has_been_stopped')}`);
+    if (!service) return;
+
+    setProcessing(prev => ({ ...prev, [id]: true }));
+    try {
+      await invoke('run_powershell', { command: `Stop-Service -Name "${service.name}" -Force -ErrorAction Stop` });
+      setServices(prev => prev.map(s => s.id === id ? { ...s, status: 'stopped' as const } : s));
+      showToast('info', t('service_stopped'), `${service.displayName} ${t('service_has_been_stopped')}`);
+    } catch (error) {
+      showToast('error', t('service_error'), String(error));
+    } finally {
+      setProcessing(prev => ({ ...prev, [id]: false }));
+    }
   };
 
-  const handleRestart = (id: string) => {
+  const handleRestart = async (id: string) => {
     const service = services.find(s => s.id === id);
-    showToast('info', t('service_restarting'), `${service?.displayName} ${t('service_is_restarting')}`);
-    setTimeout(() => {
-      showToast('success', t('service_restarted'), `${service?.displayName} ${t('service_has_been_restarted')}`);
-    }, 1500);
+    if (!service) return;
+
+    setProcessing(prev => ({ ...prev, [id]: true }));
+    showToast('info', t('service_restarting'), `${service.displayName} ${t('service_is_restarting')}`);
+    try {
+      await invoke('run_powershell', { command: `Restart-Service -Name "${service.name}" -Force -ErrorAction Stop` });
+      setServices(prev => prev.map(s => s.id === id ? { ...s, status: 'running' as const } : s));
+      showToast('success', t('service_restarted'), `${service.displayName} ${t('service_has_been_restarted')}`);
+    } catch (error) {
+      showToast('error', t('service_error'), String(error));
+    } finally {
+      setProcessing(prev => ({ ...prev, [id]: false }));
+    }
   };
 
-  const handleChangeStartup = (id: string, type: Service['startupType']) => {
-    setServices(prev => prev.map(s => s.id === id ? { ...s, startupType: type } : s));
+  const handleChangeStartup = async (id: string, type: Service['startupType']) => {
     const service = services.find(s => s.id === id);
-    showToast('success', t('startup_changed'), `${service?.displayName} ${t('startup_set_to')} ${type}`);
+    if (!service) return;
+
+    setProcessing(prev => ({ ...prev, [id]: true }));
+    try {
+      const startupMap = { automatic: 'Automatic', manual: 'Manual', disabled: 'Disabled' };
+      await invoke('run_powershell', { command: `Set-Service -Name "${service.name}" -StartupType ${startupMap[type]} -ErrorAction Stop` });
+      setServices(prev => prev.map(s => s.id === id ? { ...s, startupType: type } : s));
+      showToast('success', t('startup_changed'), `${service.displayName} ${t('startup_set_to')} ${type}`);
+    } catch (error) {
+      showToast('error', t('service_error'), String(error));
+    } finally {
+      setProcessing(prev => ({ ...prev, [id]: false }));
+    }
   };
 
   return (
@@ -473,6 +519,7 @@ export default function Services({ showToast }: ServicesProps) {
             onStop={() => handleStop(service.id)}
             onRestart={() => handleRestart(service.id)}
             onChangeStartup={(type) => handleChangeStartup(service.id, type)}
+            isProcessing={processing[service.id]}
           />
         ))}
         {filteredServices.length === 0 && (

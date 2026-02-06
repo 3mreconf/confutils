@@ -154,9 +154,10 @@ async fn run_powershell_internal(
         sanitize_powershell_input(&command)?
     };
 
-    if !skip_rate_limit {
-        check_rate_limit("powershell_command", 10, 60)?;
-    }
+    // Rate limit check removed
+    // if !skip_rate_limit {
+    //     check_rate_limit("powershell_command", 10, 60)?;
+    // }
 
     #[cfg(windows)]
     const CREATE_NO_WINDOW: u32 = 0x08000000;

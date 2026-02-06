@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { invoke } from '@tauri-apps/api/core';
 import {
   Wifi,
   Shield,
@@ -55,6 +56,7 @@ const StatCard = ({
 export default function Network({ showToast }: NetworkProps) {
   const { t } = useI18n();
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [processing, setProcessing] = useState<Record<string, boolean>>({});
 
   const handleRefresh = () => {
     setIsRefreshing(true);
@@ -64,11 +66,82 @@ export default function Network({ showToast }: NetworkProps) {
     }, 1000);
   };
 
-  const handleAction = (title: string, message: string) => {
-    showToast('info', title, message);
-    setTimeout(() => {
-      showToast('success', `${title} ${t('complete')}`, t('network_settings_applied'));
-    }, 1200);
+  const handleFlushDns = async () => {
+    setProcessing(prev => ({ ...prev, dns: true }));
+    showToast('info', t('network_dns_flush'), t('network_dns_msg'));
+    try {
+      await invoke('run_powershell', { command: 'Clear-DnsClientCache; ipconfig /flushdns' });
+      showToast('success', t('network_dns_flush'), t('network_dns_success'));
+    } catch (error) {
+      showToast('error', t('network_error'), String(error));
+    } finally {
+      setProcessing(prev => ({ ...prev, dns: false }));
+    }
+  };
+
+  const handleResetAdapter = async () => {
+    setProcessing(prev => ({ ...prev, adapter: true }));
+    showToast('info', t('network_adapter_reset'), t('network_adapter_msg'));
+    try {
+      await invoke('run_powershell', {
+        command: `
+          $adapters = Get-NetAdapter | Where-Object {$_.Status -eq 'Up'}
+          foreach ($adapter in $adapters) {
+            Restart-NetAdapter -Name $adapter.Name -Confirm:$false
+          }
+        `
+      });
+      showToast('success', t('network_adapter_reset'), t('network_adapter_success'));
+    } catch (error) {
+      showToast('error', t('network_error'), String(error));
+    } finally {
+      setProcessing(prev => ({ ...prev, adapter: false }));
+    }
+  };
+
+  const handleQosBoost = async () => {
+    setProcessing(prev => ({ ...prev, qos: true }));
+    showToast('info', t('network_qos'), t('network_qos_msg'));
+    try {
+      await invoke('run_powershell', {
+        command: `
+          # Disable Nagle's Algorithm for lower latency
+          $paths = @(
+            'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters\\Interfaces'
+          )
+          Get-ChildItem $paths[0] | ForEach-Object {
+            Set-ItemProperty -Path $_.PSPath -Name 'TcpAckFrequency' -Value 1 -Type DWord -ErrorAction SilentlyContinue
+            Set-ItemProperty -Path $_.PSPath -Name 'TCPNoDelay' -Value 1 -Type DWord -ErrorAction SilentlyContinue
+          }
+          # Disable network throttling
+          Set-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile' -Name 'NetworkThrottlingIndex' -Value 0xffffffff -Type DWord -ErrorAction SilentlyContinue
+          Set-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile' -Name 'SystemResponsiveness' -Value 0 -Type DWord -ErrorAction SilentlyContinue
+        `
+      });
+      showToast('success', t('network_qos'), t('network_qos_success'));
+    } catch (error) {
+      showToast('error', t('network_error'), String(error));
+    } finally {
+      setProcessing(prev => ({ ...prev, qos: false }));
+    }
+  };
+
+  const handleTraceRoute = async () => {
+    setProcessing(prev => ({ ...prev, trace: true }));
+    showToast('info', t('network_gateway'), t('network_gateway_msg'));
+    try {
+      await invoke('run_powershell', {
+        command: `
+          $gateway = (Get-NetRoute -DestinationPrefix '0.0.0.0/0' | Select-Object -First 1).NextHop
+          Test-Connection -ComputerName $gateway -Count 4
+        `
+      });
+      showToast('success', t('network_gateway'), t('network_trace_success'));
+    } catch (error) {
+      showToast('error', t('network_error'), String(error));
+    } finally {
+      setProcessing(prev => ({ ...prev, trace: false }));
+    }
   };
 
   return (
@@ -108,7 +181,8 @@ export default function Network({ showToast }: NetworkProps) {
           <div className="card-description">{t('network_dns_desc')}</div>
           <div className="card-footer">
             <span className="card-meta">{t('estimated')} 3s</span>
-            <button className="btn btn-primary" onClick={() => handleAction(t('network_dns_flush'), t('network_dns_msg'))}>
+            <button className="btn btn-primary" onClick={handleFlushDns} disabled={processing.dns}>
+              {processing.dns ? <RefreshCw size={14} className="spin" /> : null}
               {t('network_flush_btn')}
             </button>
           </div>
@@ -128,7 +202,8 @@ export default function Network({ showToast }: NetworkProps) {
           <div className="card-description">{t('network_adapter_desc')}</div>
           <div className="card-footer">
             <span className="card-meta">{t('downtime')} 8s</span>
-            <button className="btn btn-secondary" onClick={() => handleAction(t('network_adapter_reset'), t('network_adapter_msg'))}>
+            <button className="btn btn-secondary" onClick={handleResetAdapter} disabled={processing.adapter}>
+              {processing.adapter ? <RefreshCw size={14} className="spin" /> : null}
               {t('network_reset_btn')}
             </button>
           </div>
@@ -148,7 +223,8 @@ export default function Network({ showToast }: NetworkProps) {
           <div className="card-description">{t('network_qos_desc')}</div>
           <div className="card-footer">
             <span className="card-meta">{t('profile')}: {t('realtime')}</span>
-            <button className="btn btn-primary" onClick={() => handleAction(t('network_qos'), t('network_qos_msg'))}>
+            <button className="btn btn-primary" onClick={handleQosBoost} disabled={processing.qos}>
+              {processing.qos ? <RefreshCw size={14} className="spin" /> : null}
               {t('network_boost_btn')}
             </button>
           </div>
@@ -168,7 +244,8 @@ export default function Network({ showToast }: NetworkProps) {
           <div className="card-description">{t('network_gateway_desc')}</div>
           <div className="card-footer">
             <span className="card-meta">{t('nodes')}: 8</span>
-            <button className="btn btn-secondary" onClick={() => handleAction(t('network_gateway'), t('network_gateway_msg'))}>
+            <button className="btn btn-secondary" onClick={handleTraceRoute} disabled={processing.trace}>
+              {processing.trace ? <RefreshCw size={14} className="spin" /> : null}
               {t('network_trace_btn')}
             </button>
           </div>

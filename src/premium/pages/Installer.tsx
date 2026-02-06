@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
+import { invoke } from '@tauri-apps/api/core';
 import {
   Download,
   Search,
@@ -34,6 +35,7 @@ interface App {
   size: string;
   selected: boolean;
   installed: boolean;
+  wingetId: string;
 }
 
 const buildCategories = (t: (key: any) => string) => ([
@@ -49,38 +51,38 @@ const buildCategories = (t: (key: any) => string) => ([
 
 const buildApps = (t: (key: any) => string): App[] => ([
   // Browsers
-  { id: 'chrome', name: t('app_chrome'), description: t('app_chrome_desc'), icon: Globe, category: 'browsers', version: '121.0', size: '98 MB', selected: false, installed: false },
-  { id: 'firefox', name: t('app_firefox'), description: t('app_firefox_desc'), icon: Globe, category: 'browsers', version: '122.0', size: '58 MB', selected: false, installed: false },
-  { id: 'brave', name: t('app_brave'), description: t('app_brave_desc'), icon: Shield, category: 'browsers', version: '1.62', size: '112 MB', selected: false, installed: false },
+  { id: 'chrome', name: t('app_chrome'), description: t('app_chrome_desc'), icon: Globe, category: 'browsers', version: '121.0', size: '98 MB', selected: false, installed: false, wingetId: 'Google.Chrome' },
+  { id: 'firefox', name: t('app_firefox'), description: t('app_firefox_desc'), icon: Globe, category: 'browsers', version: '122.0', size: '58 MB', selected: false, installed: false, wingetId: 'Mozilla.Firefox' },
+  { id: 'brave', name: t('app_brave'), description: t('app_brave_desc'), icon: Shield, category: 'browsers', version: '1.62', size: '112 MB', selected: false, installed: false, wingetId: 'Brave.Brave' },
 
   // Development
-  { id: 'vscode', name: t('app_vscode'), description: t('app_vscode_desc'), icon: Code, category: 'development', version: '1.86', size: '95 MB', selected: false, installed: true },
-  { id: 'git', name: t('app_git'), description: t('app_git_desc'), icon: Code, category: 'development', version: '2.43', size: '52 MB', selected: false, installed: true },
-  { id: 'nodejs', name: t('app_node'), description: t('app_node_desc'), icon: Code, category: 'development', version: '20.11', size: '32 MB', selected: false, installed: false },
-  { id: 'python', name: t('app_python'), description: t('app_python_desc'), icon: Code, category: 'development', version: '3.12', size: '28 MB', selected: false, installed: false },
+  { id: 'vscode', name: t('app_vscode'), description: t('app_vscode_desc'), icon: Code, category: 'development', version: '1.86', size: '95 MB', selected: false, installed: false, wingetId: 'Microsoft.VisualStudioCode' },
+  { id: 'git', name: t('app_git'), description: t('app_git_desc'), icon: Code, category: 'development', version: '2.43', size: '52 MB', selected: false, installed: false, wingetId: 'Git.Git' },
+  { id: 'nodejs', name: t('app_node'), description: t('app_node_desc'), icon: Code, category: 'development', version: '20.11', size: '32 MB', selected: false, installed: false, wingetId: 'OpenJS.NodeJS.LTS' },
+  { id: 'python', name: t('app_python'), description: t('app_python_desc'), icon: Code, category: 'development', version: '3.12', size: '28 MB', selected: false, installed: false, wingetId: 'Python.Python.3.12' },
 
   // Media
-  { id: 'vlc', name: t('app_vlc'), description: t('app_vlc_desc'), icon: Film, category: 'media', version: '3.0.20', size: '42 MB', selected: false, installed: false },
-  { id: 'spotify', name: t('app_spotify'), description: t('app_spotify_desc'), icon: Music, category: 'media', version: '1.2.30', size: '118 MB', selected: false, installed: false },
-  { id: 'gimp', name: t('app_gimp'), description: t('app_gimp_desc'), icon: Image, category: 'media', version: '2.10', size: '245 MB', selected: false, installed: false },
+  { id: 'vlc', name: t('app_vlc'), description: t('app_vlc_desc'), icon: Film, category: 'media', version: '3.0.20', size: '42 MB', selected: false, installed: false, wingetId: 'VideoLAN.VLC' },
+  { id: 'spotify', name: t('app_spotify'), description: t('app_spotify_desc'), icon: Music, category: 'media', version: '1.2.30', size: '118 MB', selected: false, installed: false, wingetId: 'Spotify.Spotify' },
+  { id: 'gimp', name: t('app_gimp'), description: t('app_gimp_desc'), icon: Image, category: 'media', version: '2.10', size: '245 MB', selected: false, installed: false, wingetId: 'GIMP.GIMP.2' },
 
   // Utilities
-  { id: '7zip', name: t('app_7zip'), description: t('app_7zip_desc'), icon: Folder, category: 'utilities', version: '23.01', size: '2 MB', selected: false, installed: true },
-  { id: 'notepadpp', name: t('app_notepadpp'), description: t('app_notepadpp_desc'), icon: FileText, category: 'utilities', version: '8.6.2', size: '5 MB', selected: false, installed: false },
-  { id: 'everything', name: t('app_everything'), description: t('app_everything_desc'), icon: Search, category: 'utilities', version: '1.4.1', size: '1.5 MB', selected: false, installed: false },
+  { id: '7zip', name: t('app_7zip'), description: t('app_7zip_desc'), icon: Folder, category: 'utilities', version: '23.01', size: '2 MB', selected: false, installed: false, wingetId: '7zip.7zip' },
+  { id: 'notepadpp', name: t('app_notepadpp'), description: t('app_notepadpp_desc'), icon: FileText, category: 'utilities', version: '8.6.2', size: '5 MB', selected: false, installed: false, wingetId: 'Notepad++.Notepad++' },
+  { id: 'everything', name: t('app_everything'), description: t('app_everything_desc'), icon: Search, category: 'utilities', version: '1.4.1', size: '1.5 MB', selected: false, installed: false, wingetId: 'voidtools.Everything' },
 
   // Communication
-  { id: 'discord', name: t('app_discord'), description: t('app_discord_desc'), icon: MessageSquare, category: 'communication', version: '0.0.38', size: '85 MB', selected: false, installed: false },
-  { id: 'slack', name: t('app_slack'), description: t('app_slack_desc'), icon: MessageSquare, category: 'communication', version: '4.36', size: '112 MB', selected: false, installed: false },
-  { id: 'telegram', name: t('app_telegram'), description: t('app_telegram_desc'), icon: MessageSquare, category: 'communication', version: '4.14', size: '45 MB', selected: false, installed: false },
+  { id: 'discord', name: t('app_discord'), description: t('app_discord_desc'), icon: MessageSquare, category: 'communication', version: '0.0.38', size: '85 MB', selected: false, installed: false, wingetId: 'Discord.Discord' },
+  { id: 'slack', name: t('app_slack'), description: t('app_slack_desc'), icon: MessageSquare, category: 'communication', version: '4.36', size: '112 MB', selected: false, installed: false, wingetId: 'SlackTechnologies.Slack' },
+  { id: 'telegram', name: t('app_telegram'), description: t('app_telegram_desc'), icon: MessageSquare, category: 'communication', version: '4.14', size: '45 MB', selected: false, installed: false, wingetId: 'Telegram.TelegramDesktop' },
 
   // Security
-  { id: 'bitwarden', name: t('app_bitwarden'), description: t('app_bitwarden_desc'), icon: Shield, category: 'security', version: '2024.1', size: '95 MB', selected: false, installed: false },
-  { id: 'malwarebytes', name: t('app_malwarebytes'), description: t('app_malwarebytes_desc'), icon: Shield, category: 'security', version: '4.6.7', size: '256 MB', selected: false, installed: false },
+  { id: 'bitwarden', name: t('app_bitwarden'), description: t('app_bitwarden_desc'), icon: Shield, category: 'security', version: '2024.1', size: '95 MB', selected: false, installed: false, wingetId: 'Bitwarden.Bitwarden' },
+  { id: 'malwarebytes', name: t('app_malwarebytes'), description: t('app_malwarebytes_desc'), icon: Shield, category: 'security', version: '4.6.7', size: '256 MB', selected: false, installed: false, wingetId: 'Malwarebytes.Malwarebytes' },
 
   // Gaming
-  { id: 'steam', name: t('app_steam'), description: t('app_steam_desc'), icon: Gamepad2, category: 'gaming', version: 'Latest', size: '3 MB', selected: false, installed: false },
-  { id: 'epicgames', name: t('app_epic'), description: t('app_epic_desc'), icon: Gamepad2, category: 'gaming', version: 'Latest', size: '45 MB', selected: false, installed: false },
+  { id: 'steam', name: t('app_steam'), description: t('app_steam_desc'), icon: Gamepad2, category: 'gaming', version: 'Latest', size: '3 MB', selected: false, installed: false, wingetId: 'Valve.Steam' },
+  { id: 'epicgames', name: t('app_epic'), description: t('app_epic_desc'), icon: Gamepad2, category: 'gaming', version: 'Latest', size: '45 MB', selected: false, installed: false, wingetId: 'EpicGames.EpicGamesLauncher' },
 ]);
 
 const AppCard = ({
@@ -163,7 +165,40 @@ export default function Installer({ showToast }: InstallerProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState('all');
   const [isInstalling, setIsInstalling] = useState(false);
+  const [isScanning, setIsScanning] = useState(true);
   const categories = buildCategories(t);
+
+  // Scan for installed apps on mount
+  const scanInstalledApps = async () => {
+    setIsScanning(true);
+    try {
+      const result = await invoke('run_powershell', {
+        command: 'winget list --accept-source-agreements 2>$null | Out-String'
+      }) as string;
+
+      if (result) {
+        const installedList = result.toLowerCase();
+        setApps(prev => prev.map(app => {
+          // Check if winget ID or app name appears in installed list
+          const wingetIdParts = app.wingetId.toLowerCase().split('.');
+          const isInstalled = wingetIdParts.some(part =>
+            part.length > 2 && installedList.includes(part)
+          ) || installedList.includes(app.wingetId.toLowerCase());
+
+          return { ...app, installed: isInstalled };
+        }));
+      }
+    } catch (error) {
+      // Winget might not be installed or available, which is fine
+      console.warn('Winget scan skipped:', error);
+    } finally {
+      setIsScanning(false);
+    }
+  };
+
+  useEffect(() => {
+    scanInstalledApps();
+  }, []);
 
   useEffect(() => {
     setApps((prev) => {
@@ -218,16 +253,79 @@ export default function Installer({ showToast }: InstallerProps) {
     setIsInstalling(true);
     showToast('info', t('installer_installing'), `${t('installer_installing_prefix')} ${selectedCount} ${t('installer_apps')}...`);
 
+    // First check if winget is available
+    try {
+      await invoke('run_powershell', { command: 'winget --version' });
+    } catch {
+      showToast('error', t('installer_winget_missing'), t('installer_winget_missing_desc'));
+      setIsInstalling(false);
+      return;
+    }
+
+    let successCount = 0;
+    let alreadyInstalledCount = 0;
+    let failCount = 0;
+
     for (const app of selectedApps) {
-      await new Promise(resolve => setTimeout(resolve, 1000 + Math.random() * 500));
-      setApps(prev => prev.map(a =>
-        a.id === app.id ? { ...a, installed: true, selected: false } : a
-      ));
+      try {
+        const result = await invoke('run_powershell', {
+          command: `winget install --id ${app.wingetId} --silent --accept-package-agreements --accept-source-agreements 2>&1; if ($LASTEXITCODE -eq 0 -or $LASTEXITCODE -eq -1978335189) { exit 0 } else { exit $LASTEXITCODE }`
+        }) as string;
+
+        // Check if already installed
+        const isAlreadyInstalled = result && (
+          result.includes('already installed') ||
+          result.includes('No available upgrade') ||
+          result.includes('No newer package')
+        );
+
+        setApps(prev => prev.map(a =>
+          a.id === app.id ? { ...a, installed: true, selected: false } : a
+        ));
+
+        if (isAlreadyInstalled) {
+          alreadyInstalledCount++;
+        } else {
+          successCount++;
+        }
+      } catch (error) {
+        const errorStr = String(error);
+        // Treat "already installed" errors as success
+        if (errorStr.includes('already installed') || errorStr.includes('No available upgrade') || errorStr.includes('No newer package')) {
+          setApps(prev => prev.map(a =>
+            a.id === app.id ? { ...a, installed: true, selected: false } : a
+          ));
+          alreadyInstalledCount++;
+        } else if (errorStr.includes('No package found')) {
+          console.error(`Package not found: ${app.name} (${app.wingetId})`);
+          setApps(prev => prev.map(a =>
+            a.id === app.id ? { ...a, selected: false } : a
+          ));
+          failCount++;
+        } else {
+          console.error(`Failed to install ${app.name}:`, error);
+          setApps(prev => prev.map(a =>
+            a.id === app.id ? { ...a, selected: false } : a
+          ));
+          failCount++;
+        }
+      }
     }
 
     setIsInstalling(false);
-    showToast('success', t('installer_complete'), `${t('installer_complete_prefix')} ${selectedCount} ${t('installer_apps')}`);
+    const totalSuccess = successCount + alreadyInstalledCount;
+    if (failCount === 0) {
+      if (alreadyInstalledCount > 0 && successCount === 0) {
+        showToast('info', t('installer_complete'), `${alreadyInstalledCount} ${t('installer_already_installed')}`);
+      } else {
+        showToast('success', t('installer_complete'), `${t('installer_complete_prefix')} ${totalSuccess} ${t('installer_apps')}`);
+      }
+    } else {
+      showToast('warning', t('installer_complete'), `${totalSuccess} OK, ${failCount} failed`);
+    }
   };
+
+  const installedCount = apps.filter(a => a.installed).length;
 
   return (
     <div>
@@ -238,9 +336,13 @@ export default function Installer({ showToast }: InstallerProps) {
             {t('installer_title')}
           </h2>
           <p className="text-muted mt-sm">
-            {t('installer_subtitle')}
+            {isScanning ? t('installer_scanning') : `${t('installer_subtitle')} • ${installedCount} ${t('installer_detected')}`}
           </p>
         </div>
+        <button className="btn btn-secondary" onClick={scanInstalledApps} disabled={isScanning}>
+          <RefreshCw size={16} className={isScanning ? 'spin' : ''} />
+          {isScanning ? t('scanning') : t('refresh')}
+        </button>
       </div>
 
       {/* Search and Actions */}
@@ -264,15 +366,21 @@ export default function Installer({ showToast }: InstallerProps) {
       </div>
 
       {/* Categories */}
-      <div className="tabs mb-lg" style={{ flexWrap: 'wrap', gap: 'var(--space-xs)' }}>
+      <div className="tabs mb-lg" style={{ flexWrap: 'wrap', gap: 'var(--space-sm)', justifyContent: 'center' }}>
         {categories.map((cat) => (
           <button
             key={cat.id}
             className={`tab ${activeCategory === cat.id ? 'active' : ''}`}
             onClick={() => setActiveCategory(cat.id)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 'var(--space-sm)',
+              padding: 'var(--space-sm) var(--space-md)'
+            }}
           >
-            <cat.icon size={14} />
-            {cat.label}
+            <cat.icon size={16} />
+            <span>{cat.label}</span>
           </button>
         ))}
       </div>

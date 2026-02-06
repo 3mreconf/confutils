@@ -21,6 +21,7 @@ import {
   Info,
   X
 } from 'lucide-react';
+import { invoke } from '@tauri-apps/api/core';
 import { useI18n } from '../../i18n/I18nContext';
 
 interface DebloaterProps {
@@ -280,15 +281,27 @@ export default function Debloater({ showToast }: DebloaterProps) {
     setIsRemoving(true);
     showToast('info', t('debloater_removing'), `${t('debloater_removing_prefix')} ${selectedCount} ${t('installer_apps')}...`);
 
+    let removedAppsCount = 0;
     for (const app of selectedApps) {
-      await new Promise(resolve => setTimeout(resolve, 800 + Math.random() * 400));
-      setApps(prev => prev.map(a =>
-        a.id === app.id ? { ...a, removed: true, selected: false } : a
-      ));
+      try {
+        // Remove AppX package for current user and all users
+        const command = `Get-AppxPackage -AllUsers *${app.packageName}* | Remove-AppxPackage -AllUsers -ErrorAction SilentlyContinue; Get-AppxProvisionedPackage -Online | Where-Object {$_.PackageName -like "*${app.packageName}*"} | Remove-AppxProvisionedPackage -Online -ErrorAction SilentlyContinue`;
+        await invoke('run_powershell', { command });
+
+        setApps(prev => prev.map(a =>
+          a.id === app.id ? { ...a, removed: true, selected: false } : a
+        ));
+        removedAppsCount++;
+      } catch (error) {
+        console.error(`Failed to remove ${app.name}:`, error);
+        showToast('warning', t('debloater_partial_error'), `${app.name}: ${String(error)}`);
+      }
     }
 
     setIsRemoving(false);
-    showToast('success', t('debloater_removed'), `${t('debloater_removed_prefix')} ${selectedCount} ${t('installer_apps')}. ${t('debloater_freed')} ~${totalSize.toFixed(0)} MB`);
+    if (removedAppsCount > 0) {
+      showToast('success', t('debloater_removed'), `${t('debloater_removed_prefix')} ${removedAppsCount} ${t('installer_apps')}. ${t('debloater_freed')} ~${totalSize.toFixed(0)} MB`);
+    }
   };
 
   return (

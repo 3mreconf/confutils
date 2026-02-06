@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { invoke } from '@tauri-apps/api/core';
 import {
   Cpu,
   HardDrive,
@@ -118,7 +119,8 @@ const QuickActionCard = ({
   onAction,
   actionLabel = 'Run',
   variant = 'cyan',
-  lastRunLabel
+  lastRunLabel,
+  disabled = false
 }: {
   icon: any;
   title: string;
@@ -128,6 +130,7 @@ const QuickActionCard = ({
   actionLabel?: string;
   variant?: 'cyan' | 'amber' | 'success' | 'danger';
   lastRunLabel?: string;
+  disabled?: boolean;
 }) => (
   <div className="control-card">
     <div className="card-header">
@@ -145,8 +148,8 @@ const QuickActionCard = ({
     <p className="card-description">{description}</p>
     <div className="card-footer">
       <span className="card-meta">{lastRunLabel}</span>
-      <button className="btn btn-primary" onClick={onAction}>
-        <Play size={14} />
+      <button className="btn btn-primary" onClick={onAction} disabled={disabled}>
+        {disabled ? <RefreshCw size={14} className="spin" /> : <Play size={14} />}
         {actionLabel}
       </button>
     </div>
@@ -203,32 +206,77 @@ export default function Dashboard({ showToast, onNavigate }: DashboardProps) {
     }, 1000);
   };
 
-  const handleClearTemp = () => {
+  const [quickActionProcessing, setQuickActionProcessing] = useState<Record<string, boolean>>({});
+
+  const handleClearTemp = async () => {
+    setQuickActionProcessing(prev => ({ ...prev, temp: true }));
     showToast('info', t('action_clear_temp'), t('toast_may_take_moment'));
-    setTimeout(() => {
+    try {
+      await invoke('run_powershell', {
+        command: `
+          Remove-Item -Path "$env:TEMP\\*" -Recurse -Force -ErrorAction SilentlyContinue
+          Remove-Item -Path "C:\\Windows\\Temp\\*" -Recurse -Force -ErrorAction SilentlyContinue
+          Remove-Item -Path "C:\\Windows\\Prefetch\\*" -Recurse -Force -ErrorAction SilentlyContinue
+          Clear-RecycleBin -Force -ErrorAction SilentlyContinue
+        `
+      });
       showToast('success', t('action_clear_temp'), t('toast_freed_space'));
-    }, 2000);
+    } catch (error) {
+      showToast('error', t('action_clear_temp'), String(error));
+    } finally {
+      setQuickActionProcessing(prev => ({ ...prev, temp: false }));
+    }
   };
 
-  const handleOptimize = () => {
+  const handleOptimize = async () => {
+    setQuickActionProcessing(prev => ({ ...prev, optimize: true }));
     showToast('info', t('action_optimize'), t('toast_running_optimization'));
-    setTimeout(() => {
+    try {
+      await invoke('run_powershell', {
+        command: `
+          [System.GC]::Collect()
+          [System.GC]::WaitForPendingFinalizers()
+          Set-ItemProperty -Path "HKLM:\\SYSTEM\\CurrentControlSet\\Control\\PriorityControl" -Name "Win32PrioritySeparation" -Value 38 -Type DWord -ErrorAction SilentlyContinue
+          powercfg -setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c
+        `
+      });
       showToast('success', t('action_optimize'), t('toast_performance_improved'));
-    }, 3000);
+    } catch (error) {
+      showToast('error', t('action_optimize'), String(error));
+    } finally {
+      setQuickActionProcessing(prev => ({ ...prev, optimize: false }));
+    }
   };
 
-  const handleDefenderCheck = () => {
+  const handleDefenderCheck = async () => {
+    setQuickActionProcessing(prev => ({ ...prev, security: true }));
     showToast('info', t('action_security'), t('toast_scanning_defender'));
-    setTimeout(() => {
+    try {
+      await invoke('run_powershell', {
+        command: `
+          Update-MpSignature -ErrorAction SilentlyContinue
+          Start-MpScan -ScanType QuickScan -ErrorAction SilentlyContinue
+        `
+      });
       showToast('success', t('action_security'), t('toast_defender_ok'));
-    }, 1500);
+    } catch (error) {
+      showToast('error', t('action_security'), String(error));
+    } finally {
+      setQuickActionProcessing(prev => ({ ...prev, security: false }));
+    }
   };
 
-  const handleFlushDns = () => {
+  const handleFlushDns = async () => {
+    setQuickActionProcessing(prev => ({ ...prev, dns: true }));
     showToast('info', t('action_flush_dns'), t('toast_clearing_dns'));
-    setTimeout(() => {
+    try {
+      await invoke('run_powershell', { command: 'Clear-DnsClientCache; ipconfig /flushdns' });
       showToast('success', t('action_flush_dns'), t('toast_network_refreshed'));
-    }, 1000);
+    } catch (error) {
+      showToast('error', t('action_flush_dns'), String(error));
+    } finally {
+      setQuickActionProcessing(prev => ({ ...prev, dns: false }));
+    }
   };
 
   return (
@@ -371,6 +419,7 @@ export default function Dashboard({ showToast, onNavigate }: DashboardProps) {
           onAction={handleClearTemp}
           actionLabel={t('action_run')}
           lastRunLabel={t('last_run')}
+          disabled={quickActionProcessing.temp}
         />
 
         <QuickActionCard
@@ -381,6 +430,7 @@ export default function Dashboard({ showToast, onNavigate }: DashboardProps) {
           variant="amber"
           actionLabel={t('action_run')}
           lastRunLabel={t('last_run')}
+          disabled={quickActionProcessing.optimize}
         />
 
         <QuickActionCard
@@ -392,6 +442,7 @@ export default function Dashboard({ showToast, onNavigate }: DashboardProps) {
           variant="success"
           actionLabel={t('action_run')}
           lastRunLabel={t('last_run')}
+          disabled={quickActionProcessing.security}
         />
 
         <QuickActionCard
@@ -401,6 +452,7 @@ export default function Dashboard({ showToast, onNavigate }: DashboardProps) {
           onAction={handleFlushDns}
           actionLabel={t('action_run')}
           lastRunLabel={t('last_run')}
+          disabled={quickActionProcessing.dns}
         />
       </div>
 

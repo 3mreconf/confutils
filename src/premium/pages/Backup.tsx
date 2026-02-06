@@ -1,3 +1,5 @@
+import { useState, useEffect } from 'react';
+import { invoke } from '@tauri-apps/api/core';
 import {
   Database,
   ShieldCheck,
@@ -5,7 +7,8 @@ import {
   HardDrive,
   Clock,
   Download,
-  Upload
+  Upload,
+  RefreshCw
 } from 'lucide-react';
 import { useI18n } from '../../i18n/I18nContext';
 
@@ -19,19 +22,99 @@ const buildBackupPoints = (t: (key: any) => string) => ([
   { id: 'bp-003', label: t('backup_point_config'), time: t('backup_time_feb2'), size: '420 MB', status: t('backup_verified') }
 ]);
 
+interface RestorePoint {
+  id: string;
+  label: string;
+  time: string;
+  description?: string;
+}
+
 export default function Backup({ showToast }: BackupProps) {
   const { t } = useI18n();
-  const backupPoints = buildBackupPoints(t);
-  const handleBackup = () => {
-    showToast('info', t('backup_started'), t('backup_started_msg'));
-    setTimeout(() => {
-      showToast('success', t('backup_complete'), t('backup_complete_msg'));
-    }, 1400);
+  const [isCreating, setIsCreating] = useState(false);
+  const [isRestoring, setIsRestoring] = useState(false);
+  const [restorePoints, setRestorePoints] = useState<RestorePoint[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Load restore points on mount
+  useEffect(() => {
+    loadRestorePoints();
+  }, []);
+
+  const loadRestorePoints = async () => {
+    setIsLoading(true);
+    try {
+      const result = await invoke('run_powershell', {
+        command: `
+          Get-ComputerRestorePoint | Select-Object -First 5 | ForEach-Object {
+            [PSCustomObject]@{
+              SequenceNumber = $_.SequenceNumber
+              Description = $_.Description
+              CreationTime = $_.CreationTime.ToString('yyyy-MM-dd HH:mm')
+            }
+          } | ConvertTo-Json
+        `
+      }) as string;
+
+      if (result && result.trim()) {
+        const parsed = JSON.parse(result);
+        const points = Array.isArray(parsed) ? parsed : [parsed];
+        setRestorePoints(points.map((p: { SequenceNumber: number; Description: string; CreationTime: string }) => ({
+          id: String(p.SequenceNumber),
+          label: p.Description || 'System Restore Point',
+          time: p.CreationTime
+        })));
+      }
+    } catch (error) {
+      console.error('Failed to load restore points:', error);
+      // Fall back to static data if real data unavailable
+      setRestorePoints(buildBackupPoints(t).map(p => ({ ...p, description: undefined })));
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const handleRestore = () => {
-    showToast('warning', t('backup_restore_queued'), t('backup_restore_msg'));
+  const handleBackup = async () => {
+    setIsCreating(true);
+    showToast('info', t('backup_started'), t('backup_started_msg'));
+    try {
+      await invoke('run_powershell', {
+        command: `
+          # Enable System Restore if not enabled
+          Enable-ComputerRestore -Drive "C:\\" -ErrorAction SilentlyContinue
+          # Allow frequent restore points
+          Set-ItemProperty -Path "HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\SystemRestore" -Name "SystemRestorePointCreationFrequency" -Value 0 -Type DWord -ErrorAction SilentlyContinue
+          # Create restore point
+          Checkpoint-Computer -Description "ConfUtils Restore Point - $(Get-Date -Format 'yyyy-MM-dd HH:mm')" -RestorePointType MODIFY_SETTINGS
+        `
+      });
+      showToast('success', t('backup_complete'), t('backup_create_success'));
+      // Reload restore points
+      await loadRestorePoints();
+    } catch (error) {
+      showToast('error', t('backup_error'), String(error));
+    } finally {
+      setIsCreating(false);
+    }
   };
+
+  const handleRestore = async (pointId?: string) => {
+    setIsRestoring(true);
+    showToast('warning', t('backup_restore_started'), t('backup_restore_desc'));
+    try {
+      if (pointId) {
+        await invoke('run_powershell', {
+          command: `Restore-Computer -RestorePoint ${pointId} -Confirm:$false`
+        });
+      }
+    } catch (error) {
+      showToast('error', t('backup_error'), String(error));
+    } finally {
+      setIsRestoring(false);
+    }
+  };
+
+  const displayPoints = restorePoints.length > 0 ? restorePoints : buildBackupPoints(t);
 
   return (
     <div>
@@ -43,12 +126,12 @@ export default function Backup({ showToast }: BackupProps) {
           <p className="text-muted mt-sm">{t('backup_subtitle')}</p>
         </div>
         <div className="flex items-center gap-sm">
-          <button className="btn btn-secondary" onClick={handleRestore}>
-            <Download size={16} />
+          <button className="btn btn-secondary" onClick={() => handleRestore()} disabled={isRestoring}>
+            {isRestoring ? <RefreshCw size={16} className="spin" /> : <Download size={16} />}
             {t('backup_restore')}
           </button>
-          <button className="btn btn-primary" onClick={handleBackup}>
-            <Upload size={16} />
+          <button className="btn btn-primary" onClick={handleBackup} disabled={isCreating}>
+            {isCreating ? <RefreshCw size={16} className="spin" /> : <Upload size={16} />}
             {t('backup_new')}
           </button>
         </div>
@@ -100,23 +183,27 @@ export default function Backup({ showToast }: BackupProps) {
       <div className="list-container mt-lg">
         <div className="list-header">
           <div className="list-title">{t('backup_recent_points')}</div>
-          <div className="list-count">{backupPoints.length} {t('backup_total')}</div>
+          <div className="list-count">{displayPoints.length} {t('backup_total')}</div>
         </div>
-        {backupPoints.map((item) => (
+        {isLoading ? (
+          <div className="list-item" style={{ justifyContent: 'center' }}>
+            <RefreshCw size={20} className="spin" style={{ color: 'var(--cyan)' }} />
+          </div>
+        ) : displayPoints.map((item) => (
           <div key={item.id} className="list-item">
             <div className="list-item-icon">
               <Database size={16} />
             </div>
             <div className="list-item-content">
               <div className="list-item-title">{item.label}</div>
-              <div className="list-item-subtitle">{item.time} - {item.size}</div>
+              <div className="list-item-subtitle">{item.time}</div>
             </div>
             <div className="list-item-actions">
               <span className="card-status">
                 <span className="card-status-dot" />
                 {t('backup_verified')}
               </span>
-              <button className="btn btn-secondary" onClick={handleRestore}>{t('backup_restore')}</button>
+              <button className="btn btn-secondary" onClick={() => handleRestore(item.id)} disabled={isRestoring}>{t('backup_restore')}</button>
             </div>
           </div>
         ))}

@@ -17,7 +17,8 @@ import {
   CheckCircle,
   AlertTriangle,
   X,
-  Server
+  Server,
+  Globe
 } from 'lucide-react';
 import './styles/premium.css';
 import { useI18n } from './i18n/I18nContext';
@@ -34,6 +35,7 @@ const DebloaterPage = lazy(() => import('./premium/pages/Debloater'));
 const EssentialTweaksPage = lazy(() => import('./premium/pages/EssentialTweaks'));
 const NetworkPage = lazy(() => import('./premium/pages/Network'));
 const BackupPage = lazy(() => import('./premium/pages/Backup'));
+const GoodbyeDPIPage = lazy(() => import('./premium/pages/GoodbyeDPI'));
 const SettingsPage = lazy(() => import('./premium/pages/Settings'));
 const AboutPage = lazy(() => import('./premium/pages/About'));
 
@@ -67,6 +69,7 @@ const navGroups = [
     items: [
       { id: 'installer', labelKey: 'nav_installer', icon: Download },
       { id: 'backup', labelKey: 'nav_backup', icon: Database },
+      { id: 'goodbyedpi', labelKey: 'nav_goodbyedpi', icon: Globe },
     ]
   }
 ];
@@ -138,7 +141,7 @@ function PremiumApp() {
         if (response.ok) {
           const data = await response.json();
           const latestVersion = data.tag_name.replace('v', '');
-          const currentVersion = '2.1.19'; // Updated to match package.json/translations
+          const currentVersion = '2.1.20'; // Updated to match package.json/translations
 
           const compareVersions = (v1: string, v2: string) => {
             const parts1 = v1.split('.').map(Number);
@@ -238,6 +241,8 @@ function PremiumApp() {
         return <InstallerPage {...pageProps} />;
       case 'backup':
         return <BackupPage {...pageProps} />;
+      case 'goodbyedpi':
+        return <GoodbyeDPIPage {...pageProps} />;
       case 'settings':
         return <SettingsPage {...pageProps} />;
       case 'about':

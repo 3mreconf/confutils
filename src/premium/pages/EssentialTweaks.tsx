@@ -27,7 +27,8 @@ import {
   Zap,
   History,
   Activity,
-  UserCheck
+  UserCheck,
+  Trash2
 } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
 import { useI18n } from '../../i18n/I18nContext';
@@ -918,6 +919,132 @@ export default function EssentialTweaks({ showToast }: EssentialTweaksProps) {
       registry: [
         { path: 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\TimeZoneInformation', name: 'RealTimeIsUniversal', type: 'DWord', value: '1', originalValue: '0' }
       ]
+    },
+    {
+      id: 'remove-copilot',
+      titleKey: 'tweak_copilot_title',
+      descKey: 'tweak_copilot_desc',
+      category: 'caution',
+      tab: 'advanced',
+      icon: Wrench,
+      registry: [
+        { path: 'HKCU:\\Software\\Policies\\Microsoft\\Windows\\WindowsCopilot', name: 'TurnOffWindowsCopilot', type: 'DWord', value: '1', originalValue: '<RemoveEntry>' },
+        { path: 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\WindowsCopilot', name: 'TurnOffWindowsCopilot', type: 'DWord', value: '1', originalValue: '<RemoveEntry>' }
+      ],
+      invokeScript: [
+        'Get-AppxPackage -allusers *Microsoft.Copilot* | Remove-AppxPackage -AllUsers -ErrorAction SilentlyContinue',
+        'Get-AppxProvisionedPackage -Online | Where-Object {$_.PackageName -like "*Copilot*"} | Remove-AppxProvisionedPackage -Online -ErrorAction SilentlyContinue'
+      ]
+    },
+    {
+      id: 'disable-recall',
+      titleKey: 'tweak_recall_title',
+      descKey: 'tweak_recall_desc',
+      category: 'caution',
+      tab: 'advanced',
+      icon: Eye,
+      registry: [
+        { path: 'HKCU:\\Software\\Policies\\Microsoft\\Windows\\WindowsAI', name: 'DisableAIDataAnalysis', type: 'DWord', value: '1', originalValue: '<RemoveEntry>' },
+        { path: 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\WindowsAI', name: 'DisableAIDataAnalysis', type: 'DWord', value: '1', originalValue: '<RemoveEntry>' }
+      ],
+      invokeScript: [
+        'Dism /Online /Disable-Feature /FeatureName:Recall /NoRestart -ErrorAction SilentlyContinue'
+      ]
+    },
+    {
+      id: 'disable-location',
+      titleKey: 'tweak_location_title',
+      descKey: 'tweak_location_desc',
+      category: 'essential',
+      tab: 'essential',
+      icon: Network,
+      registry: [
+        { path: 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\LocationAndSensors', name: 'DisableLocation', type: 'DWord', value: '1', originalValue: '<RemoveEntry>' },
+        { path: 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\LocationAndSensors', name: 'DisableLocationScripting', type: 'DWord', value: '1', originalValue: '<RemoveEntry>' },
+        { path: 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\LocationAndSensors', name: 'DisableWindowsLocationProvider', type: 'DWord', value: '1', originalValue: '<RemoveEntry>' }
+      ]
+    },
+    {
+      id: 'delete-temp-files',
+      titleKey: 'tweak_delete_temp_title',
+      descKey: 'tweak_delete_temp_desc',
+      category: 'essential',
+      tab: 'essential',
+      icon: Trash2,
+      invokeScript: [
+        'Remove-Item -Path "$env:TEMP\\*" -Recurse -Force -ErrorAction SilentlyContinue',
+        'Remove-Item -Path "C:\\Windows\\Temp\\*" -Recurse -Force -ErrorAction SilentlyContinue',
+        'Remove-Item -Path "C:\\Windows\\Prefetch\\*" -Recurse -Force -ErrorAction SilentlyContinue',
+        'Clear-RecycleBin -Force -ErrorAction SilentlyContinue'
+      ]
+    },
+    {
+      id: 'start-menu-recommendations',
+      titleKey: 'tweak_start_recs_title',
+      descKey: 'tweak_start_recs_desc',
+      category: 'customize',
+      tab: 'customize',
+      icon: Layout,
+      registry: [
+        { path: 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced', name: 'Start_IrisRecommendations', type: 'DWord', value: '0', originalValue: '1' },
+        { path: 'HKCU:\\Software\\Policies\\Microsoft\\Windows\\Explorer', name: 'HideRecommendedSection', type: 'DWord', value: '1', originalValue: '<RemoveEntry>' }
+      ]
+    },
+    {
+      id: 'dns-google',
+      titleKey: 'tweak_dns_google_title',
+      descKey: 'tweak_dns_google_desc',
+      category: 'caution',
+      tab: 'advanced',
+      icon: Network,
+      invokeScript: [
+        '$adapters = Get-NetAdapter | Where-Object {$_.Status -eq "Up"}',
+        'foreach ($adapter in $adapters) {',
+        '  Set-DnsClientServerAddress -InterfaceIndex $adapter.ifIndex -ServerAddresses ("8.8.8.8","8.8.4.4","2001:4860:4860::8888","2001:4860:4860::8844")',
+        '}',
+        'ipconfig /flushdns'
+      ],
+      undoScript: [
+        '$adapters = Get-NetAdapter | Where-Object {$_.Status -eq "Up"}',
+        'foreach ($adapter in $adapters) {',
+        '  Set-DnsClientServerAddress -InterfaceIndex $adapter.ifIndex -ResetServerAddresses',
+        '}',
+        'ipconfig /flushdns'
+      ]
+    },
+    {
+      id: 'dns-cloudflare',
+      titleKey: 'tweak_dns_cloudflare_title',
+      descKey: 'tweak_dns_cloudflare_desc',
+      category: 'caution',
+      tab: 'advanced',
+      icon: Network,
+      invokeScript: [
+        '$adapters = Get-NetAdapter | Where-Object {$_.Status -eq "Up"}',
+        'foreach ($adapter in $adapters) {',
+        '  Set-DnsClientServerAddress -InterfaceIndex $adapter.ifIndex -ServerAddresses ("1.1.1.1","1.0.0.1","2606:4700:4700::1111","2606:4700:4700::1001")',
+        '}',
+        'ipconfig /flushdns'
+      ],
+      undoScript: [
+        '$adapters = Get-NetAdapter | Where-Object {$_.Status -eq "Up"}',
+        'foreach ($adapter in $adapters) {',
+        '  Set-DnsClientServerAddress -InterfaceIndex $adapter.ifIndex -ResetServerAddresses',
+        '}',
+        'ipconfig /flushdns'
+      ]
+    },
+    {
+      id: 's3-sleep',
+      titleKey: 'tweak_s3_sleep_title',
+      descKey: 'tweak_s3_sleep_desc',
+      category: 'caution',
+      tab: 'advanced',
+      icon: Power,
+      registry: [
+        { path: 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Power', name: 'PlatformAoAcOverride', type: 'DWord', value: '0', originalValue: '<RemoveEntry>' }
+      ],
+      noteKey: 'tweak_s3_sleep_note'
     }
   ]), [t]);
 

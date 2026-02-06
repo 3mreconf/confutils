@@ -10,13 +10,23 @@ import {
   FileText,
   Search,
   AlertTriangle,
-  Lock
+  Lock,
+  RefreshCw
 } from 'lucide-react';
+import { invoke } from '@tauri-apps/api/core';
 import { useI18n } from '../../i18n/I18nContext';
 
 interface PrivacyProps {
   showToast: (type: 'success' | 'warning' | 'error' | 'info', title: string, message?: string) => void;
 }
+
+type RegistryItem = {
+  path: string;
+  name: string;
+  type: string;
+  enableValue: string;
+  disableValue: string;
+};
 
 interface PrivacySetting {
   id: string;
@@ -26,6 +36,9 @@ interface PrivacySetting {
   enabled: boolean;
   risk: 'low' | 'medium' | 'high';
   category: string;
+  registry?: RegistryItem[];
+  enableScript?: string[];
+  disableScript?: string[];
 }
 
 const buildInitialSettings = (t: (key: any) => string): PrivacySetting[] => ([
@@ -36,16 +49,26 @@ const buildInitialSettings = (t: (key: any) => string): PrivacySetting[] => ([
     icon: Activity,
     enabled: false,
     risk: 'high',
-    category: 'data'
+    category: 'data',
+    registry: [
+      { path: 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\DataCollection', name: 'AllowTelemetry', type: 'DWord', enableValue: '0', disableValue: '3' },
+      { path: 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\DataCollection', name: 'AllowTelemetry', type: 'DWord', enableValue: '0', disableValue: '3' }
+    ],
+    enableScript: ['Stop-Service DiagTrack -Force; Set-Service DiagTrack -StartupType Disabled'],
+    disableScript: ['Set-Service DiagTrack -StartupType Automatic; Start-Service DiagTrack']
   },
   {
     id: 'advertising',
     title: t('privacy_disable_ad_id_title'),
     description: t('privacy_disable_ad_id_desc'),
     icon: Eye,
-    enabled: true,
+    enabled: false,
     risk: 'medium',
-    category: 'data'
+    category: 'data',
+    registry: [
+      { path: 'HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\AdvertisingInfo', name: 'Enabled', type: 'DWord', enableValue: '0', disableValue: '1' },
+      { path: 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\AdvertisingInfo', name: 'DisabledByGroupPolicy', type: 'DWord', enableValue: '1', disableValue: '0' }
+    ]
   },
   {
     id: 'location',
@@ -54,7 +77,11 @@ const buildInitialSettings = (t: (key: any) => string): PrivacySetting[] => ([
     icon: MapPin,
     enabled: false,
     risk: 'medium',
-    category: 'sensors'
+    category: 'sensors',
+    registry: [
+      { path: 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\LocationAndSensors', name: 'DisableLocation', type: 'DWord', enableValue: '1', disableValue: '0' },
+      { path: 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\LocationAndSensors', name: 'DisableLocationScripting', type: 'DWord', enableValue: '1', disableValue: '0' }
+    ]
   },
   {
     id: 'camera',
@@ -63,7 +90,10 @@ const buildInitialSettings = (t: (key: any) => string): PrivacySetting[] => ([
     icon: Camera,
     enabled: false,
     risk: 'low',
-    category: 'sensors'
+    category: 'sensors',
+    registry: [
+      { path: 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\AppPrivacy', name: 'LetAppsAccessCamera', type: 'DWord', enableValue: '2', disableValue: '0' }
+    ]
   },
   {
     id: 'microphone',
@@ -72,25 +102,37 @@ const buildInitialSettings = (t: (key: any) => string): PrivacySetting[] => ([
     icon: Mic,
     enabled: false,
     risk: 'low',
-    category: 'sensors'
+    category: 'sensors',
+    registry: [
+      { path: 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\AppPrivacy', name: 'LetAppsAccessMicrophone', type: 'DWord', enableValue: '2', disableValue: '0' }
+    ]
   },
   {
     id: 'activity',
     title: t('privacy_disable_activity_title'),
     description: t('privacy_disable_activity_desc'),
     icon: FileText,
-    enabled: true,
+    enabled: false,
     risk: 'medium',
-    category: 'data'
+    category: 'data',
+    registry: [
+      { path: 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\System', name: 'EnableActivityFeed', type: 'DWord', enableValue: '0', disableValue: '1' },
+      { path: 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\System', name: 'PublishUserActivities', type: 'DWord', enableValue: '0', disableValue: '1' },
+      { path: 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\System', name: 'UploadUserActivities', type: 'DWord', enableValue: '0', disableValue: '1' }
+    ]
   },
   {
     id: 'cortana',
     title: t('privacy_disable_cortana_title'),
     description: t('privacy_disable_cortana_desc'),
     icon: Mic,
-    enabled: true,
+    enabled: false,
     risk: 'low',
-    category: 'features'
+    category: 'features',
+    registry: [
+      { path: 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\Windows Search', name: 'AllowCortana', type: 'DWord', enableValue: '0', disableValue: '1' },
+      { path: 'HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Search', name: 'CortanaConsent', type: 'DWord', enableValue: '0', disableValue: '1' }
+    ]
   },
   {
     id: 'searchHistory',
@@ -99,7 +141,11 @@ const buildInitialSettings = (t: (key: any) => string): PrivacySetting[] => ([
     icon: Search,
     enabled: false,
     risk: 'low',
-    category: 'data'
+    category: 'data',
+    registry: [
+      { path: 'HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\SearchSettings', name: 'IsDeviceSearchHistoryEnabled', type: 'DWord', enableValue: '0', disableValue: '1' }
+    ],
+    enableScript: ['Remove-Item -Path "HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Search\\RecentApps" -Recurse -ErrorAction SilentlyContinue']
   },
 ]);
 
@@ -127,10 +173,12 @@ const ToggleSwitch = ({
 
 const PrivacyCard = ({
   setting,
-  onToggle
+  onToggle,
+  isProcessing = false
 }: {
   setting: PrivacySetting;
   onToggle: (id: string, enabled: boolean) => void;
+  isProcessing?: boolean;
 }) => {
   const { t } = useI18n();
   const Icon = setting.icon;
@@ -183,10 +231,14 @@ const PrivacyCard = ({
             </p>
           </div>
         </div>
-        <ToggleSwitch
-          checked={setting.enabled}
-          onChange={(checked) => onToggle(setting.id, checked)}
-        />
+        {isProcessing ? (
+          <RefreshCw size={20} className="spin" style={{ color: 'var(--cyan)' }} />
+        ) : (
+          <ToggleSwitch
+            checked={setting.enabled}
+            onChange={(checked) => onToggle(setting.id, checked)}
+          />
+        )}
       </div>
     </div>
   );
@@ -207,21 +259,67 @@ export default function Privacy({ showToast }: PrivacyProps) {
     });
   }, [t]);
 
-  const handleToggle = (id: string, enabled: boolean) => {
-    setSettings(prev => prev.map(s => s.id === id ? { ...s, enabled } : s));
+  const [processing, setProcessing] = useState<Record<string, boolean>>({});
+
+  const handleToggle = async (id: string, enabled: boolean) => {
     const setting = settings.find(s => s.id === id);
-    if (setting) {
+    if (!setting) return;
+
+    setProcessing(prev => ({ ...prev, [id]: true }));
+
+    try {
+      // Apply registry changes
+      if (setting.registry) {
+        for (const reg of setting.registry) {
+          const [hive, ...rest] = reg.path.split(':\\');
+          const path = rest.join('\\');
+          const value = enabled ? reg.enableValue : reg.disableValue;
+          await invoke('write_registry', {
+            hive,
+            path,
+            name: reg.name,
+            value,
+            value_type: reg.type
+          });
+        }
+      }
+
+      // Run enable/disable scripts
+      const script = enabled ? setting.enableScript : setting.disableScript;
+      if (script) {
+        await invoke('run_powershell', { command: script.join('; ') });
+      }
+
+      setSettings(prev => prev.map(s => s.id === id ? { ...s, enabled } : s));
       showToast(
         'success',
         enabled ? t('privacy_setting_enabled') : t('privacy_setting_disabled'),
         `${setting.title} ${enabled ? t('privacy_enabled_suffix') : t('privacy_disabled_suffix')}`
       );
+    } catch (error) {
+      console.error(error);
+      showToast('error', t('privacy_error'), String(error));
+    } finally {
+      setProcessing(prev => ({ ...prev, [id]: false }));
     }
   };
 
-  const handleApplyAll = () => {
-    setSettings(prev => prev.map(s => ({ ...s, enabled: true })));
-    showToast('success', t('privacy_apply_all_title'), t('privacy_apply_all_desc'));
+  const [applyingAll, setApplyingAll] = useState(false);
+
+  const handleApplyAll = async () => {
+    setApplyingAll(true);
+    try {
+      for (const setting of settings) {
+        if (!setting.enabled) {
+          await handleToggle(setting.id, true);
+        }
+      }
+      showToast('success', t('privacy_apply_all_title'), t('privacy_apply_all_desc'));
+    } catch (error) {
+      showToast('error', t('privacy_error'), String(error));
+    } finally {
+      setApplyingAll(false);
+    }
   };
 
   const handleResetAll = () => {
@@ -252,9 +350,9 @@ export default function Privacy({ showToast }: PrivacyProps) {
           <button className="btn btn-secondary" onClick={handleResetAll}>
             {t('reset_all')}
           </button>
-          <button className="btn btn-primary" onClick={handleApplyAll}>
-            <Shield size={16} />
-            {t('apply_all')}
+          <button className="btn btn-primary" onClick={handleApplyAll} disabled={applyingAll}>
+            {applyingAll ? <RefreshCw size={16} className="spin" /> : <Shield size={16} />}
+            {applyingAll ? t('applying') : t('apply_all')}
           </button>
         </div>
       </div>
@@ -376,6 +474,7 @@ export default function Privacy({ showToast }: PrivacyProps) {
             key={setting.id}
             setting={setting}
             onToggle={handleToggle}
+            isProcessing={processing[setting.id] || applyingAll}
           />
         ))}
       </div>

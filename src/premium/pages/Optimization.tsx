@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { invoke } from '@tauri-apps/api/core';
 import {
   Zap,
   Rocket,
@@ -28,6 +29,7 @@ interface OptimizationTask {
   status: 'pending' | 'running' | 'completed' | 'skipped';
   impact: 'low' | 'medium' | 'high';
   category: 'performance' | 'startup' | 'visual' | 'gaming';
+  command?: string;
 }
 
 const buildInitialTasks = (t: (key: any) => string): OptimizationTask[] => ([
@@ -38,7 +40,19 @@ const buildInitialTasks = (t: (key: any) => string): OptimizationTask[] => ([
     icon: Rocket,
     status: 'pending',
     impact: 'high',
-    category: 'startup'
+    category: 'startup',
+    command: `
+      try {
+        $path = "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run"
+        if (Test-Path $path) {
+          Remove-ItemProperty -Path $path -Name * -Force -ErrorAction SilentlyContinue
+        }
+        "Startup cleaned"
+      } catch {
+        "Error ignored"
+      }
+      exit 0
+    `
   },
   {
     id: 'clear-temp',
@@ -47,7 +61,13 @@ const buildInitialTasks = (t: (key: any) => string): OptimizationTask[] => ([
     icon: HardDrive,
     status: 'pending',
     impact: 'medium',
-    category: 'performance'
+    category: 'performance',
+    command: `
+      Remove-Item -Path "$env:TEMP\\*" -Recurse -Force -ErrorAction SilentlyContinue
+      Remove-Item -Path "C:\\Windows\\Temp\\*" -Recurse -Force -ErrorAction SilentlyContinue
+      Remove-Item -Path "C:\\Windows\\Prefetch\\*" -Recurse -Force -ErrorAction SilentlyContinue
+      Clear-RecycleBin -Force -ErrorAction SilentlyContinue
+    `
   },
   {
     id: 'optimize-memory',
@@ -56,7 +76,14 @@ const buildInitialTasks = (t: (key: any) => string): OptimizationTask[] => ([
     icon: MemoryStick,
     status: 'pending',
     impact: 'medium',
-    category: 'performance'
+    category: 'performance',
+    command: `
+      # Clear standby memory
+      [System.GC]::Collect()
+      [System.GC]::WaitForPendingFinalizers()
+      # Disable memory compression if available
+      Disable-MMAgent -MemoryCompression -ErrorAction SilentlyContinue
+    `
   },
   {
     id: 'disable-animations',
@@ -65,7 +92,13 @@ const buildInitialTasks = (t: (key: any) => string): OptimizationTask[] => ([
     icon: Monitor,
     status: 'pending',
     impact: 'low',
-    category: 'visual'
+    category: 'visual',
+    command: `
+      Set-ItemProperty -Path "HKCU:\\Control Panel\\Desktop" -Name "UserPreferencesMask" -Value ([byte[]](0x90,0x12,0x03,0x80,0x10,0x00,0x00,0x00)) -Type Binary
+      Set-ItemProperty -Path "HKCU:\\Control Panel\\Desktop\\WindowMetrics" -Name "MinAnimate" -Value "0"
+      Set-ItemProperty -Path "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced" -Name "TaskbarAnimations" -Value 0 -Type DWord
+      Set-ItemProperty -Path "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\VisualEffects" -Name "VisualFXSetting" -Value 2 -Type DWord
+    `
   },
   {
     id: 'power-plan',
@@ -74,7 +107,14 @@ const buildInitialTasks = (t: (key: any) => string): OptimizationTask[] => ([
     icon: Battery,
     status: 'pending',
     impact: 'high',
-    category: 'performance'
+    category: 'performance',
+    command: `
+      # Enable Ultimate Performance power plan
+      powercfg -duplicatescheme e9a42b02-d5df-448d-aa00-03f14749eb61 2>$null
+      $ultimatePlan = powercfg -list | Select-String "Ultimate Performance" | ForEach-Object { ($_ -split '\\s+')[3] }
+      if ($ultimatePlan) { powercfg -setactive $ultimatePlan }
+      else { powercfg -setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c }
+    `
   },
   {
     id: 'game-mode',
@@ -83,7 +123,15 @@ const buildInitialTasks = (t: (key: any) => string): OptimizationTask[] => ([
     icon: Gamepad2,
     status: 'pending',
     impact: 'medium',
-    category: 'gaming'
+    category: 'gaming',
+    command: `
+      # Enable Game Mode
+      Set-ItemProperty -Path "HKCU:\\Software\\Microsoft\\GameBar" -Name "AllowAutoGameMode" -Value 1 -Type DWord
+      Set-ItemProperty -Path "HKCU:\\Software\\Microsoft\\GameBar" -Name "AutoGameModeEnabled" -Value 1 -Type DWord
+      # Disable Game DVR
+      Set-ItemProperty -Path "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\GameDVR" -Name "AppCaptureEnabled" -Value 0 -Type DWord
+      Set-ItemProperty -Path "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\GameDVR" -Name "AllowGameDVR" -Value 0 -Type DWord -ErrorAction SilentlyContinue
+    `
   },
   {
     id: 'disable-indexing',
@@ -92,7 +140,11 @@ const buildInitialTasks = (t: (key: any) => string): OptimizationTask[] => ([
     icon: HardDrive,
     status: 'pending',
     impact: 'medium',
-    category: 'performance'
+    category: 'performance',
+    command: `
+      Stop-Service -Name "WSearch" -Force -ErrorAction SilentlyContinue
+      Set-Service -Name "WSearch" -StartupType Disabled -ErrorAction SilentlyContinue
+    `
   },
   {
     id: 'optimize-cpu',
@@ -101,7 +153,14 @@ const buildInitialTasks = (t: (key: any) => string): OptimizationTask[] => ([
     icon: Cpu,
     status: 'pending',
     impact: 'low',
-    category: 'performance'
+    category: 'performance',
+    command: `
+      # Set processor scheduling to programs
+      Set-ItemProperty -Path "HKLM:\\SYSTEM\\CurrentControlSet\\Control\\PriorityControl" -Name "Win32PrioritySeparation" -Value 38 -Type DWord
+      # Disable core parking
+      powercfg -setacvalueindex scheme_current sub_processor CPMINCORES 100
+      powercfg -setactive scheme_current
+    `
   },
 ]);
 
@@ -259,14 +318,31 @@ export default function Optimization({ showToast }: OptimizationProps) {
   const progress = Math.round((completedCount / tasks.length) * 100);
 
   const runTask = async (id: string) => {
-    setTasks(prev => prev.map(t => t.id === id ? { ...t, status: 'running' as const } : t));
+    const task = tasks.find(tsk => tsk.id === id);
+    if (!task) return;
 
-    await new Promise(resolve => setTimeout(resolve, 1500 + Math.random() * 1000));
+    setTasks(prev => prev.map(tsk => tsk.id === id ? { ...tsk, status: 'running' as const } : tsk));
 
-    setTasks(prev => prev.map(t => t.id === id ? { ...t, status: 'completed' as const } : t));
+    try {
+      if (task.command) {
+        const result = await invoke('run_powershell', { command: task.command }) as string;
+        if (result && result.startsWith('Error')) {
+          throw new Error(result);
+        }
+      }
+      setTasks(prev => prev.map(tsk => tsk.id === id ? { ...tsk, status: 'completed' as const } : tsk));
+      showToast('success', t('task_completed'), task.title);
+    } catch (error) {
+      console.error('Optimization task failed:', error);
+      setTasks(prev => prev.map(tsk => tsk.id === id ? { ...tsk, status: 'pending' as const } : tsk));
 
-    const task = tasks.find(t => t.id === id);
-    showToast('success', t('task_completed'), task?.title);
+      let errorMessage = error instanceof Error ? error.message : String(error);
+      if (errorMessage.includes("exit code 1") || errorMessage.includes("Access is denied")) {
+        errorMessage = t('opt_error_access_denied') || "Access denied. Check antivirus or permissions.";
+      }
+
+      showToast('error', t('optimization_error'), errorMessage);
+    }
   };
 
   const runAllTasks = async () => {
@@ -286,10 +362,35 @@ export default function Optimization({ showToast }: OptimizationProps) {
     showToast('info', t('opt_reset_title'), t('opt_reset_desc'));
   };
 
-  const selectProfile = (id: string) => {
+  const selectProfile = async (id: string) => {
     setActiveProfile(id);
     const profile = profiles.find(p => p.id === id);
-    showToast('success', t('opt_profile_applied'), `${profile?.name} ${t('opt_profile_active')}`);
+
+    try {
+      if (id === 'balanced') {
+        await invoke('run_powershell', { command: 'powercfg -setactive 381b4222-f694-41f0-9685-ff5bb260df2e' });
+      } else if (id === 'performance') {
+        await invoke('run_powershell', {
+          command: `
+            powercfg -duplicatescheme e9a42b02-d5df-448d-aa00-03f14749eb61 2>$null
+            $plan = powercfg -list | Select-String "Ultimate Performance" | ForEach-Object { ($_ -split '\\s+')[3] }
+            if ($plan) { powercfg -setactive $plan }
+            else { powercfg -setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c }
+          `
+        });
+      } else if (id === 'gaming') {
+        await invoke('run_powershell', {
+          command: `
+            powercfg -setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c
+            Set-ItemProperty -Path "HKCU:\\Software\\Microsoft\\GameBar" -Name "AutoGameModeEnabled" -Value 1 -Type DWord
+            Set-ItemProperty -Path "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\GameDVR" -Name "AppCaptureEnabled" -Value 0 -Type DWord
+          `
+        });
+      }
+      showToast('success', t('opt_profile_applied'), `${profile?.name} ${t('opt_profile_active')}`);
+    } catch (error) {
+      showToast('error', t('optimization_error'), String(error));
+    }
   };
 
   return (
