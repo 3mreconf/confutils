@@ -88,24 +88,16 @@ interface Toast {
 
 // Version Blocker Component
 const UpdateBlocker = ({ onUpdate, t }: { onUpdate: () => void, t: any }) => (
-  <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black">
-    <div className="max-w-md p-2xl card glass-card text-center border-danger/30">
-      <div className="flex justify-center mb-xl">
-        <div className="w-16 h-16 rounded-full bg-danger/10 flex items-center justify-center text-danger animate-pulse">
-          <AlertTriangle size={36} />
-        </div>
+  <div className="update-blocker-overlay">
+    <div className="update-blocker-card">
+      <div className="update-blocker-icon">
+        <AlertTriangle size={40} />
       </div>
-      <h2 className="text-2xl font-bold mb-md text-white">{t('update_required_title')}</h2>
-      <p className="text-text-60 mb-xl leading-relaxed">
-        {t('update_required_desc')}
-      </p>
-      <button
-        onClick={onUpdate}
-        className="btn btn-primary w-full flex items-center justify-center gap-sm group relative overflow-hidden"
-      >
-        <Download size={18} className="group-hover:translate-y-px transition-transform" />
+      <h2 className="update-blocker-title">{t('update_required_title')}</h2>
+      <p className="update-blocker-desc">{t('update_required_desc')}</p>
+      <button onClick={onUpdate} className="update-blocker-btn">
+        <Download size={20} />
         <span>{t('update_button')}</span>
-        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:animate-shimmer" />
       </button>
     </div>
   </div>
@@ -146,7 +138,7 @@ function PremiumApp() {
         if (response.ok) {
           const data = await response.json();
           const latestVersion = data.tag_name.replace('v', '');
-          const currentVersion = '2.1.18'; // Updated to match package.json/translations
+          const currentVersion = '2.1.19'; // Updated to match package.json/translations
 
           const compareVersions = (v1: string, v2: string) => {
             const parts1 = v1.split('.').map(Number);
