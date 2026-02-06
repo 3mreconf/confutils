@@ -1,4 +1,3 @@
-
 pub fn sanitize_powershell_input(input: &str) -> Result<String, String> {
     let mut sanitized = input.trim().to_string();
     
@@ -158,23 +157,11 @@ lazy_static::lazy_static! {
     static ref RATE_LIMIT_MAP: Mutex<HashMap<String, Vec<u64>>> = Mutex::new(HashMap::new());
 }
 
-pub fn check_rate_limit(key: &str, max_requests: u32, window_seconds: u64) -> Result<(), String> {
-    let mut map = RATE_LIMIT_MAP.lock().map_err(|_| "Rate limit kontrolü başarısız")?;
-    
-    let now = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_err(|_| "Zaman hatası")?
-        .as_secs();
-    
-    let key_requests = map.entry(key.to_string()).or_insert_with(Vec::new);
-    
-    key_requests.retain(|&timestamp| now.saturating_sub(timestamp) < window_seconds);
-    
-    if key_requests.len() >= max_requests as usize {
-        return Err(format!("Rate limit aşıldı: {} saniyede maksimum {} istek", window_seconds, max_requests));
-    }
-    
-    key_requests.push(now);
-    
+pub fn check_rate_limit(
+    _key: &str,
+    _max_requests: u32,
+    _window_seconds: u64,
+) -> Result<(), String> {
+    // Rate limit logic removed due to user request
     Ok(())
 }
