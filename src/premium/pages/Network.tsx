@@ -70,7 +70,14 @@ export default function Network({ showToast }: NetworkProps) {
     setProcessing(prev => ({ ...prev, dns: true }));
     showToast('info', t('network_dns_flush'), t('network_dns_msg'));
     try {
-      await invoke('run_powershell', { command: 'Clear-DnsClientCache; ipconfig /flushdns' });
+      await invoke('run_powershell', {
+        command: `
+          $ErrorActionPreference = 'SilentlyContinue'
+          Clear-DnsClientCache
+          ipconfig /flushdns | Out-Null
+          "DNS cache cleared"
+        `
+      });
       showToast('success', t('network_dns_flush'), t('network_dns_success'));
     } catch (error) {
       showToast('error', t('network_error'), String(error));
@@ -85,10 +92,14 @@ export default function Network({ showToast }: NetworkProps) {
     try {
       await invoke('run_powershell', {
         command: `
+          $ErrorActionPreference = 'SilentlyContinue'
           $adapters = Get-NetAdapter | Where-Object {$_.Status -eq 'Up'}
           foreach ($adapter in $adapters) {
-            Restart-NetAdapter -Name $adapter.Name -Confirm:$false
+            Disable-NetAdapter -Name $adapter.Name -Confirm:$false -ErrorAction SilentlyContinue
+            Start-Sleep -Milliseconds 500
+            Enable-NetAdapter -Name $adapter.Name -Confirm:$false -ErrorAction SilentlyContinue
           }
+          "Adapters reset"
         `
       });
       showToast('success', t('network_adapter_reset'), t('network_adapter_success'));
@@ -106,16 +117,22 @@ export default function Network({ showToast }: NetworkProps) {
       await invoke('run_powershell', {
         command: `
           # Disable Nagle's Algorithm for lower latency
-          $paths = @(
-            'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters\\Interfaces'
-          )
-          Get-ChildItem $paths[0] | ForEach-Object {
-            Set-ItemProperty -Path $_.PSPath -Name 'TcpAckFrequency' -Value 1 -Type DWord -ErrorAction SilentlyContinue
-            Set-ItemProperty -Path $_.PSPath -Name 'TCPNoDelay' -Value 1 -Type DWord -ErrorAction SilentlyContinue
+          $interfacesPath = 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters\\Interfaces'
+          Get-ChildItem $interfacesPath | ForEach-Object {
+            Set-ItemProperty -Path $_.PSPath -Name 'TcpAckFrequency' -Value 1 -Type DWord -Force
+            Set-ItemProperty -Path $_.PSPath -Name 'TCPNoDelay' -Value 1 -Type DWord -Force
           }
-          # Disable network throttling
-          Set-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile' -Name 'NetworkThrottlingIndex' -Value 0xffffffff -Type DWord -ErrorAction SilentlyContinue
-          Set-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile' -Name 'SystemResponsiveness' -Value 0 -Type DWord -ErrorAction SilentlyContinue
+
+          # Network throttling settings
+          $profilePath = 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile'
+          Set-ItemProperty -Path $profilePath -Name 'NetworkThrottlingIndex' -Value 0xffffffff -Type DWord -Force
+          Set-ItemProperty -Path $profilePath -Name 'SystemResponsiveness' -Value 0 -Type DWord -Force
+
+          # TCP optimizations
+          netsh int tcp set global autotuninglevel=normal
+          netsh int tcp set global congestionprovider=ctcp
+
+          "QoS settings applied"
         `
       });
       showToast('success', t('network_qos'), t('network_qos_success'));
@@ -130,13 +147,24 @@ export default function Network({ showToast }: NetworkProps) {
     setProcessing(prev => ({ ...prev, trace: true }));
     showToast('info', t('network_gateway'), t('network_gateway_msg'));
     try {
-      await invoke('run_powershell', {
+      const result = await invoke('run_powershell', {
         command: `
+          $ErrorActionPreference = 'SilentlyContinue'
           $gateway = (Get-NetRoute -DestinationPrefix '0.0.0.0/0' | Select-Object -First 1).NextHop
-          Test-Connection -ComputerName $gateway -Count 4
+          if ($gateway) {
+            $ping = Test-Connection -ComputerName $gateway -Count 2 -ErrorAction SilentlyContinue
+            if ($ping) {
+              $avg = ($ping | Measure-Object -Property ResponseTime -Average).Average
+              "Gateway: $gateway - Avg: $([math]::Round($avg, 2))ms"
+            } else {
+              "Gateway: $gateway - No response"
+            }
+          } else {
+            "No gateway found"
+          }
         `
-      });
-      showToast('success', t('network_gateway'), t('network_trace_success'));
+      }) as string;
+      showToast('success', t('network_gateway'), result || t('network_trace_success'));
     } catch (error) {
       showToast('error', t('network_error'), String(error));
     } finally {
