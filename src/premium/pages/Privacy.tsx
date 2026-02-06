@@ -271,16 +271,14 @@ export default function Privacy({ showToast }: PrivacyProps) {
       // Apply registry changes
       if (setting.registry) {
         for (const reg of setting.registry) {
-          const [hive, ...rest] = reg.path.split(':\\');
-          const path = rest.join('\\');
           const value = enabled ? reg.enableValue : reg.disableValue;
-          await invoke('write_registry', {
-            hive,
-            path,
-            name: reg.name,
-            value,
-            value_type: reg.type
-          });
+          const command = `
+            if (-not (Test-Path "${reg.path}")) {
+              New-Item -Path "${reg.path}" -Force | Out-Null
+            }
+            Set-ItemProperty -Path "${reg.path}" -Name "${reg.name}" -Value "${value}" -Type ${reg.type} -Force
+          `;
+          await invoke('run_powershell', { command });
         }
       }
 

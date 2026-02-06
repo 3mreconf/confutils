@@ -54,7 +54,7 @@ const navGroups = [
       { id: 'optimization', labelKey: 'nav_optimization', icon: Zap },
       { id: 'tweaks', labelKey: 'nav_tweaks', icon: Wrench },
       { id: 'services', labelKey: 'nav_services', icon: Server },
-      { id: 'debloater', labelKey: 'nav_debloater', icon: Trash2, badge: '12' },
+      { id: 'debloater', labelKey: 'nav_debloater', icon: Trash2 },
     ]
   },
   {
@@ -141,7 +141,7 @@ function PremiumApp() {
         if (response.ok) {
           const data = await response.json();
           const latestVersion = data.tag_name.replace('v', '');
-          const currentVersion = '2.1.20'; // Updated to match package.json/translations
+          const currentVersion = '2.1.21'; // Updated to match package.json/translations
 
           const compareVersions = (v1: string, v2: string) => {
             const parts1 = v1.split('.').map(Number);
@@ -296,7 +296,6 @@ function PremiumApp() {
                   >
                     <item.icon className="nav-icon" size={20} />
                     <span className="nav-label">{t(item.labelKey as any)}</span>
-                    {item.badge && <span className="nav-badge">{item.badge}</span>}
                   </button>
                 ))}
               </div>

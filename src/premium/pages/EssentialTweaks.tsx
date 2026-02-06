@@ -1059,15 +1059,13 @@ export default function EssentialTweaks({ showToast }: EssentialTweaksProps) {
     try {
       if (tweak.registry) {
         for (const reg of tweak.registry) {
-          const [hive, ...rest] = reg.path.split(':\\');
-          const path = rest.join('\\');
-          await invoke('write_registry', {
-            hive,
-            path,
-            name: reg.name,
-            value: reg.value,
-            value_type: reg.type
-          });
+          const command = `
+            if (-not (Test-Path "${reg.path}")) {
+              New-Item -Path "${reg.path}" -Force | Out-Null
+            }
+            Set-ItemProperty -Path "${reg.path}" -Name "${reg.name}" -Value "${reg.value}" -Type ${reg.type} -Force
+          `;
+          await invoke('run_powershell', { command });
         }
       }
 
@@ -1092,19 +1090,17 @@ export default function EssentialTweaks({ showToast }: EssentialTweaksProps) {
         await invoke('run_powershell', { command: tweak.undoScript.join('; ') });
       } else if (tweak.registry) {
         for (const reg of tweak.registry) {
-          const [hive, ...rest] = reg.path.split(':\\');
-          const path = rest.join('\\');
           if (reg.originalValue === '<RemoveEntry>') {
-            await invoke('delete_registry_value', { hive, path, name: reg.name });
+            await invoke('run_powershell', {
+              command: `Remove-ItemProperty -Path "${reg.path}" -Name "${reg.name}" -Force -ErrorAction SilentlyContinue`
+            });
           } else if (reg.originalValue === '<RemoveKey>') {
-            await invoke('delete_registry_key', { hive, path });
+            await invoke('run_powershell', {
+              command: `Remove-Item -Path "${reg.path}" -Recurse -Force -ErrorAction SilentlyContinue`
+            });
           } else if (reg.originalValue) {
-            await invoke('write_registry', {
-              hive,
-              path,
-              name: reg.name,
-              value: reg.originalValue,
-              value_type: reg.type
+            await invoke('run_powershell', {
+              command: `Set-ItemProperty -Path "${reg.path}" -Name "${reg.name}" -Value "${reg.originalValue}" -Type ${reg.type} -Force`
             });
           }
         }

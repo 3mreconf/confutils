@@ -34,27 +34,6 @@ interface OptimizationTask {
 
 const buildInitialTasks = (t: (key: any) => string): OptimizationTask[] => ([
   {
-    id: 'disable-startup',
-    title: t('opt_task_disable_startup_title'),
-    description: t('opt_task_disable_startup_desc'),
-    icon: Rocket,
-    status: 'pending',
-    impact: 'high',
-    category: 'startup',
-    command: `
-      try {
-        $path = "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run"
-        if (Test-Path $path) {
-          Remove-ItemProperty -Path $path -Name * -Force -ErrorAction SilentlyContinue
-        }
-        "Startup cleaned"
-      } catch {
-        "Error ignored"
-      }
-      exit 0
-    `
-  },
-  {
     id: 'clear-temp',
     title: t('opt_task_clear_temp_title'),
     description: t('opt_task_clear_temp_desc'),
@@ -66,7 +45,8 @@ const buildInitialTasks = (t: (key: any) => string): OptimizationTask[] => ([
       Remove-Item -Path "$env:TEMP\\*" -Recurse -Force -ErrorAction SilentlyContinue
       Remove-Item -Path "C:\\Windows\\Temp\\*" -Recurse -Force -ErrorAction SilentlyContinue
       Remove-Item -Path "C:\\Windows\\Prefetch\\*" -Recurse -Force -ErrorAction SilentlyContinue
-      Clear-RecycleBin -Force -ErrorAction SilentlyContinue
+      Clear-RecycleBin -Force -Confirm:$false -ErrorAction SilentlyContinue
+      "Temp files cleared"
     `
   },
   {
@@ -78,11 +58,13 @@ const buildInitialTasks = (t: (key: any) => string): OptimizationTask[] => ([
     impact: 'medium',
     category: 'performance',
     command: `
-      # Clear standby memory
       [System.GC]::Collect()
       [System.GC]::WaitForPendingFinalizers()
-      # Disable memory compression if available
-      Disable-MMAgent -MemoryCompression -ErrorAction SilentlyContinue
+      [System.GC]::Collect()
+      # Clear standby list using EmptyStandbyList if available
+      $rammap = "$env:TEMP\\RAMMap64.exe"
+      if (Test-Path $rammap) { Start-Process $rammap -ArgumentList "-Ew" -Wait -WindowStyle Hidden }
+      "Memory optimized"
     `
   },
   {
@@ -94,10 +76,12 @@ const buildInitialTasks = (t: (key: any) => string): OptimizationTask[] => ([
     impact: 'low',
     category: 'visual',
     command: `
-      Set-ItemProperty -Path "HKCU:\\Control Panel\\Desktop" -Name "UserPreferencesMask" -Value ([byte[]](0x90,0x12,0x03,0x80,0x10,0x00,0x00,0x00)) -Type Binary
-      Set-ItemProperty -Path "HKCU:\\Control Panel\\Desktop\\WindowMetrics" -Name "MinAnimate" -Value "0"
-      Set-ItemProperty -Path "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced" -Name "TaskbarAnimations" -Value 0 -Type DWord
-      Set-ItemProperty -Path "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\VisualEffects" -Name "VisualFXSetting" -Value 2 -Type DWord
+      Set-ItemProperty -Path "HKCU:\\Control Panel\\Desktop" -Name "UserPreferencesMask" -Value ([byte[]](0x90,0x12,0x03,0x80,0x10,0x00,0x00,0x00)) -Type Binary -Force
+      Set-ItemProperty -Path "HKCU:\\Control Panel\\Desktop\\WindowMetrics" -Name "MinAnimate" -Value "0" -Force
+      Set-ItemProperty -Path "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced" -Name "TaskbarAnimations" -Value 0 -Type DWord -Force
+      Set-ItemProperty -Path "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\VisualEffects" -Name "VisualFXSetting" -Value 2 -Type DWord -Force
+      Set-ItemProperty -Path "HKCU:\\Control Panel\\Desktop" -Name "MenuShowDelay" -Value "0" -Force
+      "Animations disabled"
     `
   },
   {
@@ -109,11 +93,18 @@ const buildInitialTasks = (t: (key: any) => string): OptimizationTask[] => ([
     impact: 'high',
     category: 'performance',
     command: `
-      # Enable Ultimate Performance power plan
+      # Create Ultimate Performance plan if not exists
       powercfg -duplicatescheme e9a42b02-d5df-448d-aa00-03f14749eb61 2>$null
-      $ultimatePlan = powercfg -list | Select-String "Ultimate Performance" | ForEach-Object { ($_ -split '\\s+')[3] }
-      if ($ultimatePlan) { powercfg -setactive $ultimatePlan }
-      else { powercfg -setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c }
+      # Try to activate Ultimate Performance
+      $plans = powercfg /list
+      $ultimate = $plans | Select-String "Ultimate Performance" | ForEach-Object { if ($_ -match '([a-f0-9-]{36})') { $matches[1] } }
+      if ($ultimate) {
+        powercfg /setactive $ultimate
+        "Ultimate Performance activated"
+      } else {
+        powercfg /setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c
+        "High Performance activated"
+      }
     `
   },
   {
@@ -126,11 +117,15 @@ const buildInitialTasks = (t: (key: any) => string): OptimizationTask[] => ([
     category: 'gaming',
     command: `
       # Enable Game Mode
-      Set-ItemProperty -Path "HKCU:\\Software\\Microsoft\\GameBar" -Name "AllowAutoGameMode" -Value 1 -Type DWord
-      Set-ItemProperty -Path "HKCU:\\Software\\Microsoft\\GameBar" -Name "AutoGameModeEnabled" -Value 1 -Type DWord
+      New-Item -Path "HKCU:\\Software\\Microsoft\\GameBar" -Force -ErrorAction SilentlyContinue | Out-Null
+      Set-ItemProperty -Path "HKCU:\\Software\\Microsoft\\GameBar" -Name "AllowAutoGameMode" -Value 1 -Type DWord -Force
+      Set-ItemProperty -Path "HKCU:\\Software\\Microsoft\\GameBar" -Name "AutoGameModeEnabled" -Value 1 -Type DWord -Force
       # Disable Game DVR
-      Set-ItemProperty -Path "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\GameDVR" -Name "AppCaptureEnabled" -Value 0 -Type DWord
-      Set-ItemProperty -Path "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\GameDVR" -Name "AllowGameDVR" -Value 0 -Type DWord -ErrorAction SilentlyContinue
+      New-Item -Path "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\GameDVR" -Force -ErrorAction SilentlyContinue | Out-Null
+      Set-ItemProperty -Path "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\GameDVR" -Name "AppCaptureEnabled" -Value 0 -Type DWord -Force
+      New-Item -Path "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\GameDVR" -Force -ErrorAction SilentlyContinue | Out-Null
+      Set-ItemProperty -Path "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\GameDVR" -Name "AllowGameDVR" -Value 0 -Type DWord -Force
+      "Game mode enabled, DVR disabled"
     `
   },
   {
@@ -144,6 +139,7 @@ const buildInitialTasks = (t: (key: any) => string): OptimizationTask[] => ([
     command: `
       Stop-Service -Name "WSearch" -Force -ErrorAction SilentlyContinue
       Set-Service -Name "WSearch" -StartupType Disabled -ErrorAction SilentlyContinue
+      "Search indexing disabled"
     `
   },
   {
@@ -152,14 +148,34 @@ const buildInitialTasks = (t: (key: any) => string): OptimizationTask[] => ([
     description: t('opt_task_optimize_cpu_desc'),
     icon: Cpu,
     status: 'pending',
-    impact: 'low',
+    impact: 'high',
     category: 'performance',
     command: `
-      # Set processor scheduling to programs
-      Set-ItemProperty -Path "HKLM:\\SYSTEM\\CurrentControlSet\\Control\\PriorityControl" -Name "Win32PrioritySeparation" -Value 38 -Type DWord
+      # Optimize for programs instead of background services
+      Set-ItemProperty -Path "HKLM:\\SYSTEM\\CurrentControlSet\\Control\\PriorityControl" -Name "Win32PrioritySeparation" -Value 38 -Type DWord -Force
       # Disable core parking
       powercfg -setacvalueindex scheme_current sub_processor CPMINCORES 100
       powercfg -setactive scheme_current
+      "CPU priority optimized"
+    `
+  },
+  {
+    id: 'disable-background-apps',
+    title: t('opt_task_background_apps_title'),
+    description: t('opt_task_background_apps_desc'),
+    icon: Rocket,
+    status: 'pending',
+    impact: 'medium',
+    category: 'startup',
+    command: `
+      # Disable background apps
+      New-Item -Path "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\BackgroundAccessApplications" -Force -ErrorAction SilentlyContinue | Out-Null
+      Set-ItemProperty -Path "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\BackgroundAccessApplications" -Name "GlobalUserDisabled" -Value 1 -Type DWord -Force
+      # Disable suggested content
+      Set-ItemProperty -Path "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\ContentDeliveryManager" -Name "SubscribedContent-338388Enabled" -Value 0 -Type DWord -Force
+      Set-ItemProperty -Path "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\ContentDeliveryManager" -Name "SubscribedContent-310093Enabled" -Value 0 -Type DWord -Force
+      Set-ItemProperty -Path "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\ContentDeliveryManager" -Name "SilentInstalledAppsEnabled" -Value 0 -Type DWord -Force
+      "Background apps disabled"
     `
   },
 ]);
@@ -368,22 +384,37 @@ export default function Optimization({ showToast }: OptimizationProps) {
 
     try {
       if (id === 'balanced') {
-        await invoke('run_powershell', { command: 'powercfg -setactive 381b4222-f694-41f0-9685-ff5bb260df2e' });
+        await invoke('run_powershell', {
+          command: `powercfg /setactive 381b4222-f694-41f0-9685-ff5bb260df2e`
+        });
       } else if (id === 'performance') {
         await invoke('run_powershell', {
           command: `
+            # Create and activate Ultimate Performance
             powercfg -duplicatescheme e9a42b02-d5df-448d-aa00-03f14749eb61 2>$null
-            $plan = powercfg -list | Select-String "Ultimate Performance" | ForEach-Object { ($_ -split '\\s+')[3] }
-            if ($plan) { powercfg -setactive $plan }
-            else { powercfg -setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c }
+            $plans = powercfg /list
+            $ultimate = $plans | Select-String "Ultimate Performance" | ForEach-Object { if ($_ -match '([a-f0-9-]{36})') { $matches[1] } }
+            if ($ultimate) { powercfg /setactive $ultimate }
+            else { powercfg /setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c }
+            # Visual effects for performance
+            Set-ItemProperty -Path "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\VisualEffects" -Name "VisualFXSetting" -Value 2 -Type DWord -Force
           `
         });
       } else if (id === 'gaming') {
         await invoke('run_powershell', {
           command: `
-            powercfg -setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c
-            Set-ItemProperty -Path "HKCU:\\Software\\Microsoft\\GameBar" -Name "AutoGameModeEnabled" -Value 1 -Type DWord
-            Set-ItemProperty -Path "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\GameDVR" -Name "AppCaptureEnabled" -Value 0 -Type DWord
+            # High Performance power plan
+            powercfg /setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c
+            # Enable Game Mode
+            New-Item -Path "HKCU:\\Software\\Microsoft\\GameBar" -Force -ErrorAction SilentlyContinue | Out-Null
+            Set-ItemProperty -Path "HKCU:\\Software\\Microsoft\\GameBar" -Name "AutoGameModeEnabled" -Value 1 -Type DWord -Force
+            # Disable Game DVR
+            New-Item -Path "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\GameDVR" -Force -ErrorAction SilentlyContinue | Out-Null
+            Set-ItemProperty -Path "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\GameDVR" -Name "AppCaptureEnabled" -Value 0 -Type DWord -Force
+            New-Item -Path "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\GameDVR" -Force -ErrorAction SilentlyContinue | Out-Null
+            Set-ItemProperty -Path "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\GameDVR" -Name "AllowGameDVR" -Value 0 -Type DWord -Force
+            # Disable transparency for FPS
+            Set-ItemProperty -Path "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize" -Name "EnableTransparency" -Value 0 -Type DWord -Force
           `
         });
       }

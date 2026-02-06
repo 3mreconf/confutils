@@ -145,7 +145,7 @@ async fn resolve_discord_auth(
 
 async fn run_powershell_internal(
     command: String,
-    skip_rate_limit: bool,
+    _skip_rate_limit: bool,
     skip_security_check: bool,
 ) -> Result<String, String> {
     let sanitized = if skip_security_check {
@@ -153,11 +153,6 @@ async fn run_powershell_internal(
     } else {
         sanitize_powershell_input(&command)?
     };
-
-    // Rate limit check removed
-    // if !skip_rate_limit {
-    //     check_rate_limit("powershell_command", 10, 60)?;
-    // }
 
     #[cfg(windows)]
     const CREATE_NO_WINDOW: u32 = 0x08000000;

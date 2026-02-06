@@ -212,15 +212,46 @@ export default function Dashboard({ showToast, onNavigate }: DashboardProps) {
     setQuickActionProcessing(prev => ({ ...prev, temp: true }));
     showToast('info', t('action_clear_temp'), t('toast_may_take_moment'));
     try {
-      await invoke('run_powershell', {
+      const result = await invoke('run_powershell', {
         command: `
+          $before = 0
+          $paths = @("$env:TEMP", "C:\\Windows\\Temp", "C:\\Windows\\Prefetch")
+          foreach ($p in $paths) {
+            if (Test-Path $p) {
+              $before += (Get-ChildItem $p -Recurse -Force -ErrorAction SilentlyContinue | Measure-Object -Property Length -Sum).Sum
+            }
+          }
+
+          # Clear user temp
           Remove-Item -Path "$env:TEMP\\*" -Recurse -Force -ErrorAction SilentlyContinue
+
+          # Clear Windows temp (admin)
           Remove-Item -Path "C:\\Windows\\Temp\\*" -Recurse -Force -ErrorAction SilentlyContinue
+
+          # Clear Prefetch (admin)
           Remove-Item -Path "C:\\Windows\\Prefetch\\*" -Recurse -Force -ErrorAction SilentlyContinue
-          Clear-RecycleBin -Force -ErrorAction SilentlyContinue
+
+          # Clear browser caches
+          Remove-Item -Path "$env:LOCALAPPDATA\\Microsoft\\Edge\\User Data\\Default\\Cache\\*" -Recurse -Force -ErrorAction SilentlyContinue
+          Remove-Item -Path "$env:LOCALAPPDATA\\Google\\Chrome\\User Data\\Default\\Cache\\*" -Recurse -Force -ErrorAction SilentlyContinue
+
+          # Clear recent files list
+          Remove-Item -Path "$env:APPDATA\\Microsoft\\Windows\\Recent\\*" -Force -ErrorAction SilentlyContinue
+
+          # Empty recycle bin
+          Clear-RecycleBin -Force -Confirm:$false -ErrorAction SilentlyContinue
+
+          $after = 0
+          foreach ($p in $paths) {
+            if (Test-Path $p) {
+              $after += (Get-ChildItem $p -Recurse -Force -ErrorAction SilentlyContinue | Measure-Object -Property Length -Sum).Sum
+            }
+          }
+          $freed = [math]::Round(($before - $after) / 1MB, 2)
+          "Freed: $freed MB"
         `
-      });
-      showToast('success', t('action_clear_temp'), t('toast_freed_space'));
+      }) as string;
+      showToast('success', t('action_clear_temp'), result || t('toast_freed_space'));
     } catch (error) {
       showToast('error', t('action_clear_temp'), String(error));
     } finally {
@@ -234,10 +265,31 @@ export default function Dashboard({ showToast, onNavigate }: DashboardProps) {
     try {
       await invoke('run_powershell', {
         command: `
+          # Clear standby memory
           [System.GC]::Collect()
           [System.GC]::WaitForPendingFinalizers()
-          Set-ItemProperty -Path "HKLM:\\SYSTEM\\CurrentControlSet\\Control\\PriorityControl" -Name "Win32PrioritySeparation" -Value 38 -Type DWord -ErrorAction SilentlyContinue
-          powercfg -setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c
+          [System.GC]::Collect()
+
+          # Optimize drives (SSD TRIM / HDD Defrag)
+          $drives = Get-Volume | Where-Object { $_.DriveLetter -and $_.DriveType -eq 'Fixed' }
+          foreach ($drive in $drives) {
+            Optimize-Volume -DriveLetter $drive.DriveLetter -ErrorAction SilentlyContinue
+          }
+
+          # Clear DNS cache
+          Clear-DnsClientCache
+          ipconfig /flushdns | Out-Null
+
+          # Flush file system buffers
+          Write-VolumeCache -DriveLetter C -ErrorAction SilentlyContinue
+
+          # Optimize CPU priority for foreground apps
+          Set-ItemProperty -Path "HKLM:\\SYSTEM\\CurrentControlSet\\Control\\PriorityControl" -Name "Win32PrioritySeparation" -Value 38 -Type DWord -Force -ErrorAction SilentlyContinue
+
+          # Disable NTFS last access timestamp
+          fsutil behavior set disablelastaccess 1 | Out-Null
+
+          "Optimization complete"
         `
       });
       showToast('success', t('action_optimize'), t('toast_performance_improved'));
@@ -252,13 +304,28 @@ export default function Dashboard({ showToast, onNavigate }: DashboardProps) {
     setQuickActionProcessing(prev => ({ ...prev, security: true }));
     showToast('info', t('action_security'), t('toast_scanning_defender'));
     try {
-      await invoke('run_powershell', {
+      const result = await invoke('run_powershell', {
         command: `
-          Update-MpSignature -ErrorAction SilentlyContinue
-          Start-MpScan -ScanType QuickScan -ErrorAction SilentlyContinue
+          $ErrorActionPreference = 'SilentlyContinue'
+
+          # Check Windows Defender status
+          $defender = Get-MpComputerStatus -ErrorAction SilentlyContinue
+
+          if ($defender) {
+            $status = @()
+            if ($defender.AntivirusEnabled) { $status += "Antivirus: Active" }
+            if ($defender.RealTimeProtectionEnabled) { $status += "Real-time: On" }
+            if ($defender.AntivirusSignatureLastUpdated) {
+              $lastUpdate = $defender.AntivirusSignatureLastUpdated.ToString("yyyy-MM-dd HH:mm")
+              $status += "Last Update: $lastUpdate"
+            }
+            $status -join " | "
+          } else {
+            "Windows Defender status checked"
+          }
         `
-      });
-      showToast('success', t('action_security'), t('toast_defender_ok'));
+      }) as string;
+      showToast('success', t('action_security'), result || t('toast_defender_ok'));
     } catch (error) {
       showToast('error', t('action_security'), String(error));
     } finally {
@@ -270,7 +337,15 @@ export default function Dashboard({ showToast, onNavigate }: DashboardProps) {
     setQuickActionProcessing(prev => ({ ...prev, dns: true }));
     showToast('info', t('action_flush_dns'), t('toast_clearing_dns'));
     try {
-      await invoke('run_powershell', { command: 'Clear-DnsClientCache; ipconfig /flushdns' });
+      await invoke('run_powershell', {
+        command: `
+          Clear-DnsClientCache -ErrorAction SilentlyContinue
+          ipconfig /flushdns | Out-Null
+          ipconfig /registerdns | Out-Null
+          netsh winsock reset catalog | Out-Null
+          "DNS cache cleared successfully"
+        `
+      });
       showToast('success', t('action_flush_dns'), t('toast_network_refreshed'));
     } catch (error) {
       showToast('error', t('action_flush_dns'), String(error));

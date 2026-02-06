@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import {
   Trash2,
   Search,
@@ -19,7 +19,9 @@ import {
   Users,
   RefreshCw,
   Info,
-  X
+  X,
+  Scan,
+  Package
 } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
 import { useI18n } from '../../i18n/I18nContext';
@@ -39,6 +41,7 @@ interface BloatApp {
   category: string;
   selected: boolean;
   removed: boolean;
+  installed: boolean;
 }
 
 const buildCategories = (t: (key: any) => string) => ([
@@ -51,31 +54,52 @@ const buildCategories = (t: (key: any) => string) => ([
 
 const buildApps = (t: (key: any) => string): BloatApp[] => ([
   // Entertainment
-  { id: 'xbox', name: t('bloat_xbox'), packageName: 'Microsoft.XboxApp', description: t('bloat_xbox_desc'), icon: Gamepad2, size: '62 MB', risk: 'safe', category: 'entertainment', selected: false, removed: false },
-  { id: 'gamebar', name: t('bloat_gamebar'), packageName: 'Microsoft.XboxGameOverlay', description: t('bloat_gamebar_desc'), icon: Gamepad2, size: '48 MB', risk: 'safe', category: 'entertainment', selected: false, removed: false },
-  { id: 'groove', name: t('bloat_groove'), packageName: 'Microsoft.ZuneMusic', description: t('bloat_groove_desc'), icon: Music, size: '31 MB', risk: 'safe', category: 'entertainment', selected: false, removed: false },
-  { id: 'movies', name: t('bloat_movies'), packageName: 'Microsoft.ZuneVideo', description: t('bloat_movies_desc'), icon: Film, size: '28 MB', risk: 'safe', category: 'entertainment', selected: false, removed: false },
-  { id: 'solitaire', name: t('bloat_solitaire'), packageName: 'Microsoft.MicrosoftSolitaireCollection', description: t('bloat_solitaire_desc'), icon: Gamepad2, size: '185 MB', risk: 'safe', category: 'entertainment', selected: false, removed: false },
+  { id: 'xboxgaming', name: 'Xbox Gaming Overlay', packageName: 'Microsoft.XboxGamingOverlay', description: t('bloat_gamebar_desc'), icon: Gamepad2, size: '35 MB', risk: 'safe', category: 'entertainment', selected: false, removed: false, installed: false },
+  { id: 'gamebar', name: t('bloat_gamebar'), packageName: 'Microsoft.XboxGameOverlay', description: t('bloat_gamebar_desc'), icon: Gamepad2, size: '48 MB', risk: 'safe', category: 'entertainment', selected: false, removed: false, installed: false },
+  { id: 'xboxidentity', name: 'Xbox Identity Provider', packageName: 'Microsoft.XboxIdentityProvider', description: 'Xbox hesap kimlik doğrulama servisi', icon: Gamepad2, size: '12 MB', risk: 'moderate', category: 'entertainment', selected: false, removed: false, installed: false },
+  { id: 'xboxspeech', name: 'Xbox Speech to Text', packageName: 'Microsoft.XboxSpeechToTextOverlay', description: 'Xbox konuşmadan metne dönüştürücü', icon: Gamepad2, size: '8 MB', risk: 'safe', category: 'entertainment', selected: false, removed: false, installed: false },
+  { id: 'groove', name: t('bloat_groove'), packageName: 'Microsoft.ZuneMusic', description: t('bloat_groove_desc'), icon: Music, size: '31 MB', risk: 'safe', category: 'entertainment', selected: false, removed: false, installed: false },
+  { id: 'movies', name: t('bloat_movies'), packageName: 'Microsoft.ZuneVideo', description: t('bloat_movies_desc'), icon: Film, size: '28 MB', risk: 'safe', category: 'entertainment', selected: false, removed: false, installed: false },
+  { id: 'solitaire', name: t('bloat_solitaire'), packageName: 'Microsoft.MicrosoftSolitaireCollection', description: t('bloat_solitaire_desc'), icon: Gamepad2, size: '185 MB', risk: 'safe', category: 'entertainment', selected: false, removed: false, installed: false },
+  { id: 'mixedreality', name: 'Mixed Reality Portal', packageName: 'Microsoft.MixedReality.Portal', description: 'Windows Mixed Reality portalı', icon: Gamepad2, size: '120 MB', risk: 'safe', category: 'entertainment', selected: false, removed: false, installed: false },
+  { id: '3dviewer', name: '3D Viewer', packageName: 'Microsoft.Microsoft3DViewer', description: '3D model görüntüleyici', icon: Film, size: '45 MB', risk: 'safe', category: 'entertainment', selected: false, removed: false, installed: false },
+  { id: 'paint3d', name: 'Paint 3D', packageName: 'Microsoft.MSPaint', description: '3D çizim uygulaması', icon: Film, size: '95 MB', risk: 'safe', category: 'entertainment', selected: false, removed: false, installed: false },
+  { id: '3dbuilder', name: '3D Builder', packageName: 'Microsoft.3DBuilder', description: '3D model oluşturucu', icon: Film, size: '50 MB', risk: 'safe', category: 'entertainment', selected: false, removed: false, installed: false },
 
   // Productivity
-  { id: 'onenote', name: t('bloat_onenote'), packageName: 'Microsoft.Office.OneNote', description: t('bloat_onenote_desc'), icon: Calendar, size: '156 MB', risk: 'moderate', category: 'productivity', selected: false, removed: false },
-  { id: 'mail', name: t('bloat_mail'), packageName: 'microsoft.windowscommunicationsapps', description: t('bloat_mail_desc'), icon: Mail, size: '89 MB', risk: 'moderate', category: 'productivity', selected: false, removed: false },
-  { id: 'maps', name: t('bloat_maps'), packageName: 'Microsoft.WindowsMaps', description: t('bloat_maps_desc'), icon: MapPin, size: '45 MB', risk: 'safe', category: 'productivity', selected: false, removed: false },
-  { id: 'news', name: t('bloat_news'), packageName: 'Microsoft.BingNews', description: t('bloat_news_desc'), icon: Newspaper, size: '38 MB', risk: 'safe', category: 'productivity', selected: false, removed: false },
-  { id: 'weather', name: t('bloat_weather'), packageName: 'Microsoft.BingWeather', description: t('bloat_weather_desc'), icon: Cloud, size: '24 MB', risk: 'safe', category: 'productivity', selected: false, removed: false },
+  { id: 'onenote', name: t('bloat_onenote'), packageName: 'Microsoft.Office.OneNote', description: t('bloat_onenote_desc'), icon: Calendar, size: '156 MB', risk: 'moderate', category: 'productivity', selected: false, removed: false, installed: false },
+  { id: 'mail', name: t('bloat_mail'), packageName: 'microsoft.windowscommunicationsapps', description: t('bloat_mail_desc'), icon: Mail, size: '89 MB', risk: 'moderate', category: 'productivity', selected: false, removed: false, installed: false },
+  { id: 'maps', name: t('bloat_maps'), packageName: 'Microsoft.WindowsMaps', description: t('bloat_maps_desc'), icon: MapPin, size: '45 MB', risk: 'safe', category: 'productivity', selected: false, removed: false, installed: false },
+  { id: 'news', name: t('bloat_news'), packageName: 'Microsoft.BingNews', description: t('bloat_news_desc'), icon: Newspaper, size: '38 MB', risk: 'safe', category: 'productivity', selected: false, removed: false, installed: false },
+  { id: 'weather', name: t('bloat_weather'), packageName: 'Microsoft.BingWeather', description: t('bloat_weather_desc'), icon: Cloud, size: '24 MB', risk: 'safe', category: 'productivity', selected: false, removed: false, installed: false },
+  { id: 'stickynotes', name: 'Sticky Notes', packageName: 'Microsoft.MicrosoftStickyNotes', description: 'Yapışkan not uygulaması', icon: Calendar, size: '18 MB', risk: 'safe', category: 'productivity', selected: false, removed: false, installed: false },
+  { id: 'todos', name: 'Microsoft To Do', packageName: 'Microsoft.Todos', description: 'Görev yönetici uygulaması', icon: Calendar, size: '32 MB', risk: 'safe', category: 'productivity', selected: false, removed: false, installed: false },
+  { id: 'officehub', name: 'Office Hub', packageName: 'Microsoft.MicrosoftOfficeHub', description: 'Office uygulama merkezi', icon: Calendar, size: '28 MB', risk: 'safe', category: 'productivity', selected: false, removed: false, installed: false },
+  { id: 'powerautomate', name: 'Power Automate', packageName: 'Microsoft.PowerAutomateDesktop', description: 'Otomasyon aracı', icon: Calendar, size: '150 MB', risk: 'safe', category: 'productivity', selected: false, removed: false, installed: false },
+  { id: 'clipchamp', name: 'Clipchamp', packageName: 'Clipchamp.Clipchamp', description: 'Video düzenleme uygulaması', icon: Film, size: '200 MB', risk: 'safe', category: 'productivity', selected: false, removed: false, installed: false },
 
   // Social
-  { id: 'people', name: t('bloat_people'), packageName: 'Microsoft.People', description: t('bloat_people_desc'), icon: Users, size: '18 MB', risk: 'safe', category: 'social', selected: false, removed: false },
-  { id: 'skype', name: t('bloat_skype'), packageName: 'Microsoft.SkypeApp', description: t('bloat_skype_desc'), icon: Phone, size: '128 MB', risk: 'safe', category: 'social', selected: false, removed: false },
-  { id: 'yourphone', name: t('bloat_yourphone'), packageName: 'Microsoft.YourPhone', description: t('bloat_yourphone_desc'), icon: Phone, size: '42 MB', risk: 'moderate', category: 'social', selected: false, removed: false },
+  { id: 'people', name: t('bloat_people'), packageName: 'Microsoft.People', description: t('bloat_people_desc'), icon: Users, size: '18 MB', risk: 'safe', category: 'social', selected: false, removed: false, installed: false },
+  { id: 'skype', name: t('bloat_skype'), packageName: 'Microsoft.SkypeApp', description: t('bloat_skype_desc'), icon: Phone, size: '128 MB', risk: 'safe', category: 'social', selected: false, removed: false, installed: false },
+  { id: 'yourphone', name: t('bloat_yourphone'), packageName: 'Microsoft.YourPhone', description: t('bloat_yourphone_desc'), icon: Phone, size: '42 MB', risk: 'moderate', category: 'social', selected: false, removed: false, installed: false },
+  { id: 'phonelink', name: 'Phone Link', packageName: 'Microsoft.Windows.PhoneLink', description: 'Telefon bağlantı uygulaması', icon: Phone, size: '42 MB', risk: 'moderate', category: 'social', selected: false, removed: false, installed: false },
+  { id: 'teams', name: 'Microsoft Teams', packageName: 'MicrosoftTeams', description: 'İş iletişim uygulaması', icon: Users, size: '180 MB', risk: 'safe', category: 'social', selected: false, removed: false, installed: false },
+  { id: 'teams2', name: 'Microsoft Teams (New)', packageName: 'MSTeams', description: 'Yeni Teams uygulaması', icon: Users, size: '180 MB', risk: 'safe', category: 'social', selected: false, removed: false, installed: false },
 
   // System
-  { id: 'cortana', name: t('bloat_cortana'), packageName: 'Microsoft.549981C3F5F10', description: t('bloat_cortana_desc'), icon: Shield, size: '245 MB', risk: 'moderate', category: 'system', selected: false, removed: false },
-  { id: 'camera', name: t('bloat_camera'), packageName: 'Microsoft.WindowsCamera', description: t('bloat_camera_desc'), icon: Camera, size: '23 MB', risk: 'caution', category: 'system', selected: false, removed: false },
-  { id: 'feedback', name: t('bloat_feedback'), packageName: 'Microsoft.WindowsFeedbackHub', description: t('bloat_feedback_desc'), icon: Info, size: '56 MB', risk: 'safe', category: 'system', selected: false, removed: false },
-  { id: 'gethelp', name: t('bloat_gethelp'), packageName: 'Microsoft.GetHelp', description: t('bloat_gethelp_desc'), icon: Info, size: '12 MB', risk: 'safe', category: 'system', selected: false, removed: false },
-  { id: 'tips', name: t('bloat_tips'), packageName: 'Microsoft.Getstarted', description: t('bloat_tips_desc'), icon: Info, size: '15 MB', risk: 'safe', category: 'system', selected: false, removed: false },
-  { id: 'store', name: t('bloat_store'), packageName: 'Microsoft.WindowsStore', description: t('bloat_store_desc'), icon: ShoppingBag, size: '78 MB', risk: 'caution', category: 'system', selected: false, removed: false },
+  { id: 'cortana', name: t('bloat_cortana'), packageName: 'Microsoft.549981C3F5F10', description: t('bloat_cortana_desc'), icon: Shield, size: '245 MB', risk: 'moderate', category: 'system', selected: false, removed: false, installed: false },
+  { id: 'camera', name: t('bloat_camera'), packageName: 'Microsoft.WindowsCamera', description: t('bloat_camera_desc'), icon: Camera, size: '23 MB', risk: 'caution', category: 'system', selected: false, removed: false, installed: false },
+  { id: 'feedback', name: t('bloat_feedback'), packageName: 'Microsoft.WindowsFeedbackHub', description: t('bloat_feedback_desc'), icon: Info, size: '56 MB', risk: 'safe', category: 'system', selected: false, removed: false, installed: false },
+  { id: 'gethelp', name: t('bloat_gethelp'), packageName: 'Microsoft.GetHelp', description: t('bloat_gethelp_desc'), icon: Info, size: '12 MB', risk: 'safe', category: 'system', selected: false, removed: false, installed: false },
+  { id: 'tips', name: t('bloat_tips'), packageName: 'Microsoft.Getstarted', description: t('bloat_tips_desc'), icon: Info, size: '15 MB', risk: 'safe', category: 'system', selected: false, removed: false, installed: false },
+  { id: 'store', name: t('bloat_store'), packageName: 'Microsoft.WindowsStore', description: t('bloat_store_desc'), icon: ShoppingBag, size: '78 MB', risk: 'caution', category: 'system', selected: false, removed: false, installed: false },
+  { id: 'alarms', name: 'Alarms & Clock', packageName: 'Microsoft.WindowsAlarms', description: 'Alarm ve saat uygulaması', icon: Calendar, size: '15 MB', risk: 'safe', category: 'system', selected: false, removed: false, installed: false },
+  { id: 'calculator', name: 'Calculator', packageName: 'Microsoft.WindowsCalculator', description: 'Hesap makinesi', icon: Calendar, size: '8 MB', risk: 'caution', category: 'system', selected: false, removed: false, installed: false },
+  { id: 'soundrecorder', name: 'Sound Recorder', packageName: 'Microsoft.WindowsSoundRecorder', description: 'Ses kayıt uygulaması', icon: Music, size: '10 MB', risk: 'safe', category: 'system', selected: false, removed: false, installed: false },
+  { id: 'widgets', name: 'Windows Widgets', packageName: 'MicrosoftWindows.Client.WebExperience', description: 'Masaüstü widget paneli', icon: Info, size: '85 MB', risk: 'safe', category: 'system', selected: false, removed: false, installed: false },
+  { id: 'copilot', name: 'Copilot', packageName: 'Microsoft.Copilot', description: 'AI asistan', icon: Shield, size: '50 MB', risk: 'safe', category: 'system', selected: false, removed: false, installed: false },
+  { id: 'quickassist', name: 'Quick Assist', packageName: 'MicrosoftCorporationII.QuickAssist', description: 'Uzak yardım uygulaması', icon: Info, size: '25 MB', risk: 'safe', category: 'system', selected: false, removed: false, installed: false },
+  { id: 'photos', name: 'Photos', packageName: 'Microsoft.Windows.Photos', description: 'Fotoğraf görüntüleyici', icon: Camera, size: '150 MB', risk: 'caution', category: 'system', selected: false, removed: false, installed: false },
 ]);
 
 const BloatCard = ({
@@ -211,8 +235,48 @@ export default function Debloater({ showToast }: DebloaterProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState('all');
   const [isRemoving, setIsRemoving] = useState(false);
+  const [isScanning, setIsScanning] = useState(false);
   const [showWarning, setShowWarning] = useState(false);
+  const [scanComplete, setScanComplete] = useState(false);
   const categories = buildCategories(t);
+
+  // Auto-scan on mount
+  const scanInstalledApps = useCallback(async () => {
+    setIsScanning(true);
+    setScanComplete(false);
+
+    try {
+      // Get all installed AppX packages for current user as a single string
+      const result = await invoke('run_powershell', {
+        command: `(Get-AppxPackage).Name -join '|'`
+      }) as string;
+
+      const installedList = result.toLowerCase();
+
+      setApps(prev => prev.map(app => {
+        const packageLower = app.packageName.toLowerCase();
+        // Simple check: is this package name in the installed list?
+        const isInstalled = installedList.includes(packageLower);
+
+        return {
+          ...app,
+          installed: isInstalled,
+          removed: !isInstalled
+        };
+      }));
+
+      setScanComplete(true);
+    } catch (error) {
+      console.error('Failed to scan installed apps:', error);
+      showToast('error', t('scan_error'), String(error));
+    } finally {
+      setIsScanning(false);
+    }
+  }, [showToast, t]);
+
+  useEffect(() => {
+    scanInstalledApps();
+  }, []);
 
   useEffect(() => {
     setApps((prev) => {
@@ -222,18 +286,20 @@ export default function Debloater({ showToast }: DebloaterProps) {
         return existing ? {
           ...app,
           selected: existing.selected,
-          removed: existing.removed
+          removed: existing.removed,
+          installed: existing.installed
         } : app;
       });
     });
   }, [t]);
 
+  // Only show installed apps (not removed)
   const filteredApps = useMemo(() => {
     return apps.filter(app => {
       const matchesSearch = app.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         app.description.toLowerCase().includes(searchQuery.toLowerCase());
       const matchesCategory = activeCategory === 'all' || app.category === activeCategory;
-      return matchesSearch && matchesCategory && !app.removed;
+      return matchesSearch && matchesCategory && app.installed && !app.removed;
     });
   }, [apps, searchQuery, activeCategory]);
 
@@ -243,7 +309,8 @@ export default function Debloater({ showToast }: DebloaterProps) {
     const size = parseFloat(app.size);
     return acc + (isNaN(size) ? 0 : size);
   }, 0);
-  const removedCount = apps.filter(app => app.removed).length;
+  const installedCount = apps.filter(app => app.installed && !app.removed).length;
+  const removedCount = apps.filter(app => app.removed || !app.installed).length;
 
   const toggleApp = (id: string) => {
     setApps(prev => prev.map(app =>
@@ -254,7 +321,7 @@ export default function Debloater({ showToast }: DebloaterProps) {
   const selectAllSafe = () => {
     setApps(prev => prev.map(app => ({
       ...app,
-      selected: app.risk === 'safe' && !app.removed
+      selected: app.risk === 'safe' && app.installed && !app.removed
     })));
   };
 
@@ -289,7 +356,7 @@ export default function Debloater({ showToast }: DebloaterProps) {
         await invoke('run_powershell', { command });
 
         setApps(prev => prev.map(a =>
-          a.id === app.id ? { ...a, removed: true, selected: false } : a
+          a.id === app.id ? { ...a, removed: true, selected: false, installed: false } : a
         ));
         removedAppsCount++;
       } catch (error) {
@@ -359,6 +426,23 @@ export default function Debloater({ showToast }: DebloaterProps) {
           </p>
         </div>
         <div className="flex gap-sm">
+          <button
+            className="btn btn-secondary"
+            onClick={scanInstalledApps}
+            disabled={isScanning}
+          >
+            {isScanning ? (
+              <>
+                <RefreshCw size={16} className="spin" />
+                {t('scanning')}
+              </>
+            ) : (
+              <>
+                <Scan size={16} />
+                {t('debloater_rescan')}
+              </>
+            )}
+          </button>
           <button className="btn btn-secondary" onClick={selectAllSafe}>
             {t('debloater_select_safe')}
           </button>
@@ -367,6 +451,26 @@ export default function Debloater({ showToast }: DebloaterProps) {
           </button>
         </div>
       </div>
+
+      {/* Scan Status Banner */}
+      {isScanning && (
+        <div
+          className="control-card mb-lg"
+          style={{
+            padding: 'var(--space-md)',
+            background: 'linear-gradient(135deg, var(--cyan-15) 0%, var(--surface) 100%)',
+            border: '1px solid var(--cyan)'
+          }}
+        >
+          <div className="flex items-center gap-md">
+            <RefreshCw size={20} className="spin" color="var(--cyan)" />
+            <div>
+              <span style={{ fontWeight: 600, color: 'var(--text-100)' }}>{t('debloater_scanning')}</span>
+              <p className="text-muted" style={{ fontSize: 'var(--text-sm)' }}>{t('debloater_scanning_desc')}</p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Stats */}
       <div
@@ -378,25 +482,37 @@ export default function Debloater({ showToast }: DebloaterProps) {
         }}
       >
         <div className="control-card" style={{ padding: 'var(--space-md)' }}>
-          <div className="text-muted" style={{ fontSize: 'var(--text-xs)' }}>{t('debloater_total')}</div>
+          <div className="flex items-center gap-sm mb-xs">
+            <Package size={14} color="var(--text-50)" />
+            <span className="text-muted" style={{ fontSize: 'var(--text-xs)' }}>{t('debloater_detected')}</span>
+          </div>
           <div className="font-mono" style={{ fontSize: 'var(--text-xl)', color: 'var(--text-100)' }}>
-            {apps.length}
+            {installedCount}
           </div>
         </div>
         <div className="control-card" style={{ padding: 'var(--space-md)' }}>
-          <div className="text-muted" style={{ fontSize: 'var(--text-xs)' }}>{t('selected')}</div>
+          <div className="flex items-center gap-sm mb-xs">
+            <Trash2 size={14} color="var(--danger)" />
+            <span className="text-muted" style={{ fontSize: 'var(--text-xs)' }}>{t('selected')}</span>
+          </div>
           <div className="font-mono" style={{ fontSize: 'var(--text-xl)', color: 'var(--danger)' }}>
             {selectedCount}
           </div>
         </div>
         <div className="control-card" style={{ padding: 'var(--space-md)' }}>
-          <div className="text-muted" style={{ fontSize: 'var(--text-xs)' }}>{t('removed')}</div>
+          <div className="flex items-center gap-sm mb-xs">
+            <CheckCircle size={14} color="var(--success)" />
+            <span className="text-muted" style={{ fontSize: 'var(--text-xs)' }}>{t('debloater_clean')}</span>
+          </div>
           <div className="font-mono" style={{ fontSize: 'var(--text-xl)', color: 'var(--success)' }}>
             {removedCount}
           </div>
         </div>
         <div className="control-card" style={{ padding: 'var(--space-md)' }}>
-          <div className="text-muted" style={{ fontSize: 'var(--text-xs)' }}>{t('space_to_free')}</div>
+          <div className="flex items-center gap-sm mb-xs">
+            <Cloud size={14} color="var(--cyan)" />
+            <span className="text-muted" style={{ fontSize: 'var(--text-xs)' }}>{t('space_to_free')}</span>
+          </div>
           <div className="font-mono" style={{ fontSize: 'var(--text-xl)', color: 'var(--cyan)' }}>
             ~{totalSize.toFixed(0)} MB
           </div>
@@ -416,12 +532,13 @@ export default function Debloater({ showToast }: DebloaterProps) {
           />
         </div>
 
-        <div className="tabs">
+        <div className="tabs" style={{ flexWrap: 'wrap', gap: 'var(--space-sm)', justifyContent: 'center' }}>
           {categories.map((cat) => (
             <button
               key={cat.id}
               className={`tab ${activeCategory === cat.id ? 'active' : ''}`}
               onClick={() => setActiveCategory(cat.id)}
+              style={{ gap: 'var(--space-sm)' }}
             >
               {cat.label}
             </button>
@@ -432,23 +549,37 @@ export default function Debloater({ showToast }: DebloaterProps) {
       {/* Apps Grid */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 280px', gap: 'var(--space-lg)' }}>
         <div>
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(2, 1fr)',
-              gap: 'var(--space-md)'
-            }}
-          >
-            {filteredApps.map((app) => (
-              <BloatCard
-                key={app.id}
-                app={app}
-                onToggle={() => toggleApp(app.id)}
-              />
-            ))}
-          </div>
+          {isScanning ? (
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(2, 1fr)',
+                gap: 'var(--space-md)'
+              }}
+            >
+              {[1, 2, 3, 4, 5, 6].map(i => (
+                <div key={i} className="skeleton" style={{ height: '100px', borderRadius: 'var(--radius-lg)' }} />
+              ))}
+            </div>
+          ) : (
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(2, 1fr)',
+                gap: 'var(--space-md)'
+              }}
+            >
+              {filteredApps.map((app) => (
+                <BloatCard
+                  key={app.id}
+                  app={app}
+                  onToggle={() => toggleApp(app.id)}
+                />
+              ))}
+            </div>
+          )}
 
-          {filteredApps.length === 0 && (
+          {!isScanning && filteredApps.length === 0 && scanComplete && (
             <div className="empty-state">
               <CheckCircle className="empty-state-icon" color="var(--success)" />
               <h3 className="empty-state-title">{t('debloater_empty_title')}</h3>
