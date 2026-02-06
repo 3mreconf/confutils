@@ -1589,6 +1589,11 @@ body {
   }
 }
 
+.spin,
+.animate-spin {
+  animation: spin 0.8s linear infinite;
+}
+
 /* Skeleton Loading */
 .skeleton {
   background: linear-gradient(90deg,
@@ -1743,4 +1748,104 @@ body {
 
 .min-w-0 {
   min-width: 0;
+}
+
+.opacity-70 {
+  opacity: 0.7;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Update Blocker - Version Required Overlay
+   ───────────────────────────────────────────────────────────────────────────── */
+
+.update-blocker-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(7, 8, 10, 0.98);
+  backdrop-filter: blur(16px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  animation: fade-in var(--duration-normal) var(--ease-out);
+}
+
+.update-blocker-card {
+  background: var(--surface);
+  border: 1px solid rgba(255, 71, 87, 0.3);
+  border-radius: var(--radius-xl);
+  padding: var(--space-2xl);
+  max-width: 420px;
+  width: 90%;
+  text-align: center;
+  box-shadow: var(--shadow-lg), 0 0 80px rgba(255, 71, 87, 0.15);
+  animation: modal-enter var(--duration-normal) var(--ease-spring);
+}
+
+.update-blocker-icon {
+  width: 80px;
+  height: 80px;
+  margin: 0 auto var(--space-xl);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--danger-bg);
+  border-radius: var(--radius-full);
+  color: var(--danger);
+  border: 2px solid rgba(255, 71, 87, 0.3);
+  animation: pulse-danger 2s ease-in-out infinite;
+}
+
+@keyframes pulse-danger {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(255, 71, 87, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 12px rgba(255, 71, 87, 0);
+  }
+}
+
+.update-blocker-title {
+  font-size: var(--text-2xl);
+  font-weight: 700;
+  color: var(--text-100);
+  margin-bottom: var(--space-md);
+}
+
+.update-blocker-desc {
+  font-size: var(--text-sm);
+  color: var(--text-50);
+  line-height: 1.7;
+  margin-bottom: var(--space-xl);
+}
+
+.update-blocker-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-sm);
+  padding: var(--space-md) var(--space-lg);
+  background: var(--danger);
+  color: white;
+  font-family: var(--font-ui);
+  font-size: var(--text-base);
+  font-weight: 600;
+  border: none;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-out);
+}
+
+.update-blocker-btn:hover {
+  background: #ff5a67;
+  box-shadow: 0 0 30px rgba(255, 71, 87, 0.4);
+  transform: translateY(-1px);
+}
+
+.update-blocker-btn:active {
+  transform: translateY(0) scale(0.98);
 }
