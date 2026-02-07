@@ -1,7 +1,7 @@
 ﻿export const translations = {
   en: {
     app_name: 'ConfUtils',
-    app_version: 'v2.1.21',
+    app_version: 'v2.1.22',
     nav_overview: 'Overview',
     nav_system: 'System',
     nav_security: 'Security',
@@ -772,12 +772,13 @@
     gdpi_service_removed_desc: 'GoodbyeDPI service has been uninstalled',
     gdpi_service_error: 'Service Error',
     gdpi_info: 'GoodbyeDPI is an open-source utility that bypasses Deep Packet Inspection systems used by ISPs to block certain websites. It works by modifying network packets to avoid detection.',
+
     recommended: 'Recommended',
     downloading: 'Downloading...'
   },
   tr: {
     app_name: 'ConfUtils',
-    app_version: 'v2.1.21',
+    app_version: 'v2.1.22',
     nav_overview: 'Genel Bakış',
     nav_system: 'Sistem',
     nav_security: 'Güvenlik',
@@ -1548,6 +1549,7 @@
     gdpi_service_removed_desc: 'GoodbyeDPI servisi kaldırıldı',
     gdpi_service_error: 'Servis Hatası',
     gdpi_info: 'GoodbyeDPI, İSS"lerin belirli web sitelerini engellemek için kullandığı Derin Paket İnceleme sistemlerini atlayan açık kaynaklı bir araçtır. Ağ paketlerini değiştirerek algılanmadan çalışır.',
+
     recommended: 'Önerilen',
     downloading: 'İndiriliyor...'
   }
