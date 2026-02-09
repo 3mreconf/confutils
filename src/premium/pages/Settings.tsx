@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { invoke } from '@tauri-apps/api/core';
 import {
   Sliders,
   Bell,
@@ -19,35 +20,40 @@ const buildSettingBlocks = (t: (key: any) => string) => ([
     title: t('settings_block_performance_title'),
     description: t('settings_block_performance_desc'),
     icon: Sliders,
-    status: t('settings_status_balanced')
+    status: t('settings_status_balanced'),
+    command: 'Start-Process "control.exe" -ArgumentList "powercfg.cpl"'
   },
   {
     id: 'alerts',
     title: t('settings_block_alerts_title'),
     description: t('settings_block_alerts_desc'),
     icon: Bell,
-    status: t('settings_status_enabled')
+    status: t('settings_status_enabled'),
+    command: 'Start-Process "ms-settings:notifications"'
   },
   {
     id: 'security',
     title: t('settings_block_security_title'),
     description: t('settings_block_security_desc'),
     icon: Shield,
-    status: t('settings_status_hardened')
+    status: t('settings_status_hardened'),
+    command: 'Start-Process "windowsdefender:"'
   },
   {
     id: 'display',
     title: t('settings_block_display_title'),
     description: t('settings_block_display_desc'),
     icon: Monitor,
-    status: t('settings_status_cinematic')
+    status: t('settings_status_cinematic'),
+    command: 'Start-Process "ms-settings:display"'
   },
   {
     id: 'cloud',
     title: t('settings_block_cloud_title'),
     description: t('settings_block_cloud_desc'),
     icon: Cloud,
-    status: t('settings_status_connected')
+    status: t('settings_status_connected'),
+    command: 'Start-Process "ms-settings:backup"'
   }
 ]);
 
@@ -63,6 +69,17 @@ export default function Settings({ showToast }: SettingsProps) {
       setSaving(false);
       showToast('success', t('settings_saved'), t('settings_saved_msg'));
     }, 1200);
+  };
+  const handleConfigure = async (blockId: string) => {
+    const block = settingBlocks.find((item) => item.id === blockId);
+    if (!block?.command) return;
+
+    showToast('info', t('settings_configure'), t('settings_opening'));
+    try {
+      await invoke('run_powershell', { command: block.command });
+    } catch (error) {
+      showToast('error', t('settings_opening'), String(error));
+    }
   };
 
   return (
@@ -96,7 +113,7 @@ export default function Settings({ showToast }: SettingsProps) {
             <div className="card-description">{block.description}</div>
             <div className="card-footer">
               <span className="card-meta">{t('last_updated_today')}</span>
-              <button className="btn btn-secondary" onClick={() => showToast('info', t('settings_configure'), t('settings_opening'))}>
+              <button className="btn btn-secondary" onClick={() => handleConfigure(block.id)}>
                 {t('settings_configure')}
               </button>
             </div>

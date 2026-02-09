@@ -27,9 +27,6 @@
           ]
         }
       ]
-    },
-    "dialog:allow-message",
-    "dialog:allow-open",
-    "dialog:allow-save"
+    }
   ]
 }

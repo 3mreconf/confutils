@@ -15,9 +15,11 @@ import {
 } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
 import { useI18n } from '../../i18n/I18nContext';
+import { privacySettingsCatalog } from '../data/privacy_settings_catalog';
 
 interface PrivacyProps {
   showToast: (type: 'success' | 'warning' | 'error' | 'info', title: string, message?: string) => void;
+  externalQuery?: string;
 }
 
 type RegistryItem = {
@@ -41,113 +43,30 @@ interface PrivacySetting {
   disableScript?: string[];
 }
 
-const buildInitialSettings = (t: (key: any) => string): PrivacySetting[] => ([
-  {
-    id: 'telemetry',
-    title: t('privacy_disable_telemetry_title'),
-    description: t('privacy_disable_telemetry_desc'),
-    icon: Activity,
+const privacyIcons: Record<string, any> = {
+  telemetry: Activity,
+  advertising: Eye,
+  location: MapPin,
+  camera: Camera,
+  microphone: Mic,
+  activity: FileText,
+  cortana: Mic,
+  searchHistory: Search
+};
+
+const buildInitialSettings = (t: (key: any) => string): PrivacySetting[] =>
+  privacySettingsCatalog.map((setting) => ({
+    id: setting.id,
+    title: t(setting.titleKey as any),
+    description: t(setting.descriptionKey as any),
+    icon: privacyIcons[setting.id] || Shield,
     enabled: false,
-    risk: 'high',
-    category: 'data',
-    registry: [
-      { path: 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\DataCollection', name: 'AllowTelemetry', type: 'DWord', enableValue: '0', disableValue: '3' },
-      { path: 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\DataCollection', name: 'AllowTelemetry', type: 'DWord', enableValue: '0', disableValue: '3' }
-    ],
-    enableScript: ['Stop-Service DiagTrack -Force; Set-Service DiagTrack -StartupType Disabled'],
-    disableScript: ['Set-Service DiagTrack -StartupType Automatic; Start-Service DiagTrack']
-  },
-  {
-    id: 'advertising',
-    title: t('privacy_disable_ad_id_title'),
-    description: t('privacy_disable_ad_id_desc'),
-    icon: Eye,
-    enabled: false,
-    risk: 'medium',
-    category: 'data',
-    registry: [
-      { path: 'HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\AdvertisingInfo', name: 'Enabled', type: 'DWord', enableValue: '0', disableValue: '1' },
-      { path: 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\AdvertisingInfo', name: 'DisabledByGroupPolicy', type: 'DWord', enableValue: '1', disableValue: '0' }
-    ]
-  },
-  {
-    id: 'location',
-    title: t('privacy_disable_location_title'),
-    description: t('privacy_disable_location_desc'),
-    icon: MapPin,
-    enabled: false,
-    risk: 'medium',
-    category: 'sensors',
-    registry: [
-      { path: 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\LocationAndSensors', name: 'DisableLocation', type: 'DWord', enableValue: '1', disableValue: '0' },
-      { path: 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\LocationAndSensors', name: 'DisableLocationScripting', type: 'DWord', enableValue: '1', disableValue: '0' }
-    ]
-  },
-  {
-    id: 'camera',
-    title: t('privacy_block_camera_title'),
-    description: t('privacy_block_camera_desc'),
-    icon: Camera,
-    enabled: false,
-    risk: 'low',
-    category: 'sensors',
-    registry: [
-      { path: 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\AppPrivacy', name: 'LetAppsAccessCamera', type: 'DWord', enableValue: '2', disableValue: '0' }
-    ]
-  },
-  {
-    id: 'microphone',
-    title: t('privacy_block_microphone_title'),
-    description: t('privacy_block_microphone_desc'),
-    icon: Mic,
-    enabled: false,
-    risk: 'low',
-    category: 'sensors',
-    registry: [
-      { path: 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\AppPrivacy', name: 'LetAppsAccessMicrophone', type: 'DWord', enableValue: '2', disableValue: '0' }
-    ]
-  },
-  {
-    id: 'activity',
-    title: t('privacy_disable_activity_title'),
-    description: t('privacy_disable_activity_desc'),
-    icon: FileText,
-    enabled: false,
-    risk: 'medium',
-    category: 'data',
-    registry: [
-      { path: 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\System', name: 'EnableActivityFeed', type: 'DWord', enableValue: '0', disableValue: '1' },
-      { path: 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\System', name: 'PublishUserActivities', type: 'DWord', enableValue: '0', disableValue: '1' },
-      { path: 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\System', name: 'UploadUserActivities', type: 'DWord', enableValue: '0', disableValue: '1' }
-    ]
-  },
-  {
-    id: 'cortana',
-    title: t('privacy_disable_cortana_title'),
-    description: t('privacy_disable_cortana_desc'),
-    icon: Mic,
-    enabled: false,
-    risk: 'low',
-    category: 'features',
-    registry: [
-      { path: 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\Windows Search', name: 'AllowCortana', type: 'DWord', enableValue: '0', disableValue: '1' },
-      { path: 'HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Search', name: 'CortanaConsent', type: 'DWord', enableValue: '0', disableValue: '1' }
-    ]
-  },
-  {
-    id: 'searchHistory',
-    title: t('privacy_clear_search_title'),
-    description: t('privacy_clear_search_desc'),
-    icon: Search,
-    enabled: false,
-    risk: 'low',
-    category: 'data',
-    registry: [
-      { path: 'HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\SearchSettings', name: 'IsDeviceSearchHistoryEnabled', type: 'DWord', enableValue: '0', disableValue: '1' }
-    ],
-    enableScript: ['Remove-Item -Path "HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Search\\RecentApps" -Recurse -ErrorAction SilentlyContinue']
-  },
-]);
+    risk: setting.risk,
+    category: setting.category,
+    registry: setting.registry,
+    enableScript: setting.enableScript,
+    disableScript: setting.disableScript
+  }));
 
 const ToggleSwitch = ({
   checked,
@@ -244,22 +163,94 @@ const PrivacyCard = ({
   );
 };
 
-export default function Privacy({ showToast }: PrivacyProps) {
+export default function Privacy({ showToast, externalQuery }: PrivacyProps) {
   const { t } = useI18n();
   const [settings, setSettings] = useState(buildInitialSettings(t));
   const [filter, setFilter] = useState<'all' | 'enabled' | 'disabled'>('all');
-
-  useEffect(() => {
-    setSettings((prev) => {
-      const base = buildInitialSettings(t);
-      return base.map((setting) => ({
-        ...setting,
-        enabled: prev.find((p) => p.id === setting.id)?.enabled ?? setting.enabled
-      }));
-    });
-  }, [t]);
+  const [searchQuery, setSearchQuery] = useState('');
 
   const [processing, setProcessing] = useState<Record<string, boolean>>({});
+  const [applyingAll, setApplyingAll] = useState(false);
+
+  const runPowershell = async (command: string, requireAdmin = false) => {
+    const wrapped = requireAdmin ? `
+      $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+      if (-not $isAdmin) { throw "ADMIN_REQUIRED" }
+      ${command}
+    ` : command;
+
+    return await invoke('run_powershell', { command: wrapped });
+  };
+
+  const loadPrivacyState = async () => {
+    const base = buildInitialSettings(t);
+    const registryItems = base.flatMap((setting) =>
+      (setting.registry ?? []).map((reg, idx) => ({
+        key: `${setting.id}:${idx}`,
+        path: reg.path,
+        name: reg.name,
+        enableValue: reg.enableValue
+      }))
+    );
+
+    if (registryItems.length === 0) {
+      setSettings(base);
+      return;
+    }
+
+    try {
+      const payload = JSON.stringify(registryItems);
+      const result = await runPowershell(`
+        $items = @'
+${payload}
+'@ | ConvertFrom-Json
+        $out = foreach ($i in $items) {
+          $value = $null
+          try {
+            $prop = Get-ItemProperty -Path $i.path -Name $i.name -ErrorAction SilentlyContinue
+            $value = $prop."$($i.name)"
+          } catch {}
+          [PSCustomObject]@{ key = $i.key; value = $value }
+        }
+        $out | ConvertTo-Json -Compress
+      `) as string;
+
+      const parsed = result && result.trim() ? JSON.parse(result) : [];
+      const list = Array.isArray(parsed) ? parsed : [parsed];
+      const valueMap = new Map<string, string>();
+      list.forEach((item: { key: string; value: any }) => {
+        const val = item.value === null || typeof item.value === 'undefined' ? '' : String(item.value);
+        valueMap.set(item.key, val);
+      });
+
+      const updated = base.map((setting) => {
+        if (!setting.registry || setting.registry.length === 0) {
+          return setting;
+        }
+        const allMatch = setting.registry.every((reg, idx) => {
+          const key = `${setting.id}:${idx}`;
+          const current = valueMap.get(key) ?? '';
+          return current === String(reg.enableValue);
+        });
+        return { ...setting, enabled: allMatch };
+      });
+
+      setSettings(updated);
+    } catch (error) {
+      console.error('Failed to load privacy state:', error);
+      setSettings(base);
+    }
+  };
+
+  useEffect(() => {
+    loadPrivacyState();
+  }, [t]);
+
+  useEffect(() => {
+    if (typeof externalQuery === 'string') {
+      setSearchQuery(externalQuery);
+    }
+  }, [externalQuery]);
 
   const handleToggle = async (id: string, enabled: boolean) => {
     const setting = settings.find(s => s.id === id);
@@ -268,6 +259,8 @@ export default function Privacy({ showToast }: PrivacyProps) {
     setProcessing(prev => ({ ...prev, [id]: true }));
 
     try {
+      const needsAdmin = (setting.registry ?? []).some(r => r.path.startsWith('HKLM:')) || !!setting.enableScript || !!setting.disableScript;
+
       // Apply registry changes
       if (setting.registry) {
         for (const reg of setting.registry) {
@@ -278,14 +271,14 @@ export default function Privacy({ showToast }: PrivacyProps) {
             }
             Set-ItemProperty -Path "${reg.path}" -Name "${reg.name}" -Value "${value}" -Type ${reg.type} -Force
           `;
-          await invoke('run_powershell', { command });
+          await runPowershell(command, reg.path.startsWith('HKLM:') || needsAdmin);
         }
       }
 
       // Run enable/disable scripts
       const script = enabled ? setting.enableScript : setting.disableScript;
       if (script) {
-        await invoke('run_powershell', { command: script.join('; ') });
+        await runPowershell(script.join('; '), needsAdmin);
       }
 
       setSettings(prev => prev.map(s => s.id === id ? { ...s, enabled } : s));
@@ -296,13 +289,12 @@ export default function Privacy({ showToast }: PrivacyProps) {
       );
     } catch (error) {
       console.error(error);
-      showToast('error', t('privacy_error'), String(error));
+      const msg = String(error);
+      showToast('error', t('privacy_error'), msg.includes('ADMIN_REQUIRED') ? t('tweak_admin_required') : msg);
     } finally {
       setProcessing(prev => ({ ...prev, [id]: false }));
     }
   };
-
-  const [applyingAll, setApplyingAll] = useState(false);
 
   const handleApplyAll = async () => {
     setApplyingAll(true);
@@ -320,16 +312,29 @@ export default function Privacy({ showToast }: PrivacyProps) {
     }
   };
 
-  const handleResetAll = () => {
-    setSettings(buildInitialSettings(t));
-    showToast('info', t('privacy_reset_title'), t('privacy_reset_desc'));
+  const handleResetAll = async () => {
+    setApplyingAll(true);
+    try {
+      for (const setting of settings) {
+        if (setting.enabled) {
+          await handleToggle(setting.id, false);
+        }
+      }
+      showToast('info', t('privacy_reset_title'), t('privacy_reset_desc'));
+    } catch (error) {
+      showToast('error', t('privacy_error'), String(error));
+    } finally {
+      setApplyingAll(false);
+    }
   };
 
   const enabledCount = settings.filter(s => s.enabled).length;
   const filteredSettings = settings.filter(s => {
-    if (filter === 'enabled') return s.enabled;
-    if (filter === 'disabled') return !s.enabled;
-    return true;
+    if (filter === 'enabled' && !s.enabled) return false;
+    if (filter === 'disabled' && s.enabled) return false;
+    if (!searchQuery.trim()) return true;
+    const q = searchQuery.trim().toLowerCase();
+    return s.title.toLowerCase().includes(q) || s.description.toLowerCase().includes(q);
   });
 
   return (
@@ -448,21 +453,33 @@ export default function Privacy({ showToast }: PrivacyProps) {
         </div>
       </div>
 
-      {/* Filter Tabs */}
-      <div className="tabs mb-lg" style={{ display: 'inline-flex' }}>
-        {[
-          { id: 'all', label: `${t('filter_all')} (${settings.length})` },
-          { id: 'enabled', label: `${t('filter_enabled')} (${enabledCount})` },
-          { id: 'disabled', label: `${t('filter_disabled')} (${settings.length - enabledCount})` },
-        ].map((tab) => (
-          <button
-            key={tab.id}
-            className={`tab ${filter === tab.id ? 'active' : ''}`}
-            onClick={() => setFilter(tab.id as typeof filter)}
-          >
-            {tab.label}
-          </button>
-        ))}
+      {/* Filters */}
+      <div className="flex items-center justify-between mb-lg" style={{ gap: 'var(--space-md)', flexWrap: 'wrap' }}>
+        <div className="search-input" style={{ minWidth: 240 }}>
+          <Search className="search-icon" size={18} />
+          <input
+            type="text"
+            className="input"
+            placeholder={t('privacy_search_placeholder' as any)}
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
+        </div>
+        <div className="tabs" style={{ display: 'inline-flex' }}>
+          {[
+            { id: 'all', label: `${t('filter_all')} (${settings.length})` },
+            { id: 'enabled', label: `${t('filter_enabled')} (${enabledCount})` },
+            { id: 'disabled', label: `${t('filter_disabled')} (${settings.length - enabledCount})` },
+          ].map((tab) => (
+            <button
+              key={tab.id}
+              className={`tab ${filter === tab.id ? 'active' : ''}`}
+              onClick={() => setFilter(tab.id as typeof filter)}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Settings Grid */}

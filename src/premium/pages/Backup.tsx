@@ -16,12 +16,6 @@ interface BackupProps {
   showToast: (type: 'success' | 'warning' | 'error' | 'info', title: string, message?: string) => void;
 }
 
-const buildBackupPoints = (t: (key: any) => string) => ([
-  { id: 'bp-001', label: t('backup_point_system'), time: t('backup_time_today'), size: '18.4 GB', status: t('backup_verified') },
-  { id: 'bp-002', label: t('backup_point_drivers'), time: t('backup_time_yesterday'), size: '6.2 GB', status: t('backup_verified') },
-  { id: 'bp-003', label: t('backup_point_config'), time: t('backup_time_feb2'), size: '420 MB', status: t('backup_verified') }
-]);
-
 interface RestorePoint {
   id: string;
   label: string;
@@ -46,13 +40,29 @@ export default function Backup({ showToast }: BackupProps) {
     try {
       const result = await invoke('run_powershell', {
         command: `
-          Get-ComputerRestorePoint | Select-Object -First 5 | ForEach-Object {
+          $points = @()
+          try { $points = Get-CimInstance -ClassName SystemRestore -ErrorAction Stop } catch {}
+          if (-not $points) {
+            try { $points = Get-ComputerRestorePoint -ErrorAction Stop } catch {}
+          }
+
+          $mapped = $points | ForEach-Object {
+            $raw = $_.CreationTime
+            $dt = $null
+            if ($raw -is [DateTime]) {
+              $dt = $raw
+            } elseif ($raw) {
+              try { $dt = [Management.ManagementDateTimeConverter]::ToDateTime($raw) } catch {}
+            }
             [PSCustomObject]@{
               SequenceNumber = $_.SequenceNumber
               Description = $_.Description
-              CreationTime = $_.CreationTime.ToString('yyyy-MM-dd HH:mm')
+              CreationTime = if ($dt) { $dt.ToString('yyyy-MM-dd HH:mm') } else { 'Unknown' }
+              CreationSort = if ($dt) { $dt } else { [DateTime]::MinValue }
             }
-          } | ConvertTo-Json
+          } | Sort-Object -Property CreationSort -Descending | Select-Object -First 12
+
+          if ($mapped) { $mapped | ConvertTo-Json } else { '[]' }
         `
       }) as string;
 
@@ -67,8 +77,7 @@ export default function Backup({ showToast }: BackupProps) {
       }
     } catch (error) {
       console.error('Failed to load restore points:', error);
-      // Fall back to static data if real data unavailable
-      setRestorePoints(buildBackupPoints(t).map(p => ({ ...p, description: undefined })));
+      showToast('error', t('backup_error'), String(error));
     } finally {
       setIsLoading(false);
     }
@@ -89,7 +98,8 @@ export default function Backup({ showToast }: BackupProps) {
         `
       });
       showToast('success', t('backup_complete'), t('backup_create_success'));
-      // Reload restore points
+      // Reload restore points (give Windows time to register the point)
+      await new Promise((resolve) => setTimeout(resolve, 1500));
       await loadRestorePoints();
     } catch (error) {
       showToast('error', t('backup_error'), String(error));
@@ -114,7 +124,7 @@ export default function Backup({ showToast }: BackupProps) {
     }
   };
 
-  const displayPoints = restorePoints.length > 0 ? restorePoints : buildBackupPoints(t);
+  const displayPoints = restorePoints;
 
   return (
     <div>
@@ -188,6 +198,12 @@ export default function Backup({ showToast }: BackupProps) {
         {isLoading ? (
           <div className="list-item" style={{ justifyContent: 'center' }}>
             <RefreshCw size={20} className="spin" style={{ color: 'var(--cyan)' }} />
+          </div>
+        ) : displayPoints.length === 0 ? (
+          <div className="list-item" style={{ justifyContent: 'center' }}>
+            <div className="text-muted" style={{ fontSize: 'var(--text-sm)' }}>
+              {t('backup_empty_desc')}
+            </div>
           </div>
         ) : displayPoints.map((item) => (
           <div key={item.id} className="list-item">

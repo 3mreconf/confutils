@@ -12,6 +12,7 @@ import {
   Film,
   FileText,
   Shield,
+  Cloud,
   Gamepad2,
   MessageSquare,
   Folder,
@@ -20,9 +21,11 @@ import {
   X
 } from 'lucide-react';
 import { useI18n } from '../../i18n/I18nContext';
+import appsRawEn from '../data/toolbox_applications.json';
 
 interface InstallerProps {
   showToast: (type: 'success' | 'warning' | 'error' | 'info', title: string, message?: string) => void;
+  externalQuery?: string;
 }
 
 interface App {
@@ -31,12 +34,56 @@ interface App {
   description: string;
   icon: any;
   category: string;
-  version: string;
-  size: string;
   selected: boolean;
   installed: boolean;
   wingetId: string;
 }
+
+
+type ToolboxAppItem = {
+  category?: string;
+  content: string;
+  description: string;
+  winget?: string;
+};
+
+type ToolboxAppRecord = Record<string, ToolboxAppItem>;
+
+
+const mapToolboxCategory = (category?: string) => {
+  switch (category) {
+    case 'Browsers':
+      return 'browsers';
+    case 'Development':
+      return 'development';
+    case 'Multimedia Tools':
+      return 'media';
+    case 'Utilities':
+      return 'utilities';
+    case 'Communications':
+      return 'communication';
+    case 'Games':
+      return 'gaming';
+    case 'Microsoft Tools':
+      return 'utilities';
+    case 'Pro Tools':
+      return 'utilities';
+    case 'Document':
+      return 'utilities';
+    default:
+      return 'utilities';
+  }
+};
+
+const categoryIcons: Record<string, any> = {
+  browsers: Globe,
+  development: Code,
+  media: Film,
+  utilities: Folder,
+  communication: MessageSquare,
+  security: Shield,
+  gaming: Gamepad2
+};
 
 const buildCategories = (t: (key: any) => string) => ([
   { id: 'all', label: t('filter_all'), icon: Package },
@@ -49,41 +96,102 @@ const buildCategories = (t: (key: any) => string) => ([
   { id: 'gaming', label: t('category_gaming'), icon: Gamepad2 },
 ]);
 
-const buildApps = (t: (key: any) => string): App[] => ([
-  // Browsers
-  { id: 'chrome', name: t('app_chrome'), description: t('app_chrome_desc'), icon: Globe, category: 'browsers', version: '121.0', size: '98 MB', selected: false, installed: false, wingetId: 'Google.Chrome' },
-  { id: 'firefox', name: t('app_firefox'), description: t('app_firefox_desc'), icon: Globe, category: 'browsers', version: '122.0', size: '58 MB', selected: false, installed: false, wingetId: 'Mozilla.Firefox' },
-  { id: 'brave', name: t('app_brave'), description: t('app_brave_desc'), icon: Shield, category: 'browsers', version: '1.62', size: '112 MB', selected: false, installed: false, wingetId: 'Brave.Brave' },
 
-  // Development
-  { id: 'vscode', name: t('app_vscode'), description: t('app_vscode_desc'), icon: Code, category: 'development', version: '1.86', size: '95 MB', selected: false, installed: false, wingetId: 'Microsoft.VisualStudioCode' },
-  { id: 'git', name: t('app_git'), description: t('app_git_desc'), icon: Code, category: 'development', version: '2.43', size: '52 MB', selected: false, installed: false, wingetId: 'Git.Git' },
-  { id: 'nodejs', name: t('app_node'), description: t('app_node_desc'), icon: Code, category: 'development', version: '20.11', size: '32 MB', selected: false, installed: false, wingetId: 'OpenJS.NodeJS.LTS' },
-  { id: 'python', name: t('app_python'), description: t('app_python_desc'), icon: Code, category: 'development', version: '3.12', size: '28 MB', selected: false, installed: false, wingetId: 'Python.Python.3.12' },
+const buildApps = (t: (key: any) => string): App[] => {
+  const toolboxApps = appsRawEn as ToolboxAppRecord;
+  const base: App[] = [
+    // Browsers
+    { id: 'chrome', name: t('app_chrome'), description: t('app_chrome_desc'), icon: Globe, category: 'browsers', selected: false, installed: false, wingetId: 'Google.Chrome' },
+    { id: 'firefox', name: t('app_firefox'), description: t('app_firefox_desc'), icon: Globe, category: 'browsers', selected: false, installed: false, wingetId: 'Mozilla.Firefox' },
+    { id: 'brave', name: t('app_brave'), description: t('app_brave_desc'), icon: Shield, category: 'browsers', selected: false, installed: false, wingetId: 'Brave.Brave' },
+    { id: 'edge', name: t('app_edge'), description: t('app_edge_desc'), icon: Globe, category: 'browsers', selected: false, installed: false, wingetId: 'Microsoft.Edge' },
+    { id: 'opera', name: t('app_opera'), description: t('app_opera_desc'), icon: Globe, category: 'browsers', selected: false, installed: false, wingetId: 'Opera.Opera' },
+    { id: 'vivaldi', name: t('app_vivaldi'), description: t('app_vivaldi_desc'), icon: Globe, category: 'browsers', selected: false, installed: false, wingetId: 'Vivaldi.Vivaldi' },
+    { id: 'thunderbird', name: t('app_thunderbird'), description: t('app_thunderbird_desc'), icon: Globe, category: 'browsers', selected: false, installed: false, wingetId: 'Mozilla.Thunderbird' },
 
-  // Media
-  { id: 'vlc', name: t('app_vlc'), description: t('app_vlc_desc'), icon: Film, category: 'media', version: '3.0.20', size: '42 MB', selected: false, installed: false, wingetId: 'VideoLAN.VLC' },
-  { id: 'spotify', name: t('app_spotify'), description: t('app_spotify_desc'), icon: Music, category: 'media', version: '1.2.30', size: '118 MB', selected: false, installed: false, wingetId: 'Spotify.Spotify' },
-  { id: 'gimp', name: t('app_gimp'), description: t('app_gimp_desc'), icon: Image, category: 'media', version: '2.10', size: '245 MB', selected: false, installed: false, wingetId: 'GIMP.GIMP.2' },
+    // Development
+    { id: 'vscode', name: t('app_vscode'), description: t('app_vscode_desc'), icon: Code, category: 'development', selected: false, installed: false, wingetId: 'Microsoft.VisualStudioCode' },
+    { id: 'git', name: t('app_git'), description: t('app_git_desc'), icon: Code, category: 'development', selected: false, installed: false, wingetId: 'Git.Git' },
+    { id: 'nodejs', name: t('app_node'), description: t('app_node_desc'), icon: Code, category: 'development', selected: false, installed: false, wingetId: 'OpenJS.NodeJS.LTS' },
+    { id: 'python', name: t('app_python'), description: t('app_python_desc'), icon: Code, category: 'development', selected: false, installed: false, wingetId: 'Python.Python.3.12' },
+    { id: 'terminal', name: t('app_terminal'), description: t('app_terminal_desc'), icon: Code, category: 'development', selected: false, installed: false, wingetId: 'Microsoft.WindowsTerminal' },
+    { id: 'github', name: t('app_github_desktop'), description: t('app_github_desktop_desc'), icon: Code, category: 'development', selected: false, installed: false, wingetId: 'GitHub.GitHubDesktop' },
+    { id: 'docker', name: t('app_docker'), description: t('app_docker_desc'), icon: Code, category: 'development', selected: false, installed: false, wingetId: 'Docker.DockerDesktop' },
+    { id: 'postman', name: t('app_postman'), description: t('app_postman_desc'), icon: Code, category: 'development', selected: false, installed: false, wingetId: 'Postman.Postman' },
+    { id: 'jetbrains_toolbox', name: t('app_jetbrains_toolbox'), description: t('app_jetbrains_toolbox_desc'), icon: Code, category: 'development', selected: false, installed: false, wingetId: 'JetBrains.Toolbox' },
+    { id: 'sublime', name: t('app_sublime'), description: t('app_sublime_desc'), icon: Code, category: 'development', selected: false, installed: false, wingetId: 'SublimeHQ.SublimeText.4' },
 
-  // Utilities
-  { id: '7zip', name: t('app_7zip'), description: t('app_7zip_desc'), icon: Folder, category: 'utilities', version: '23.01', size: '2 MB', selected: false, installed: false, wingetId: '7zip.7zip' },
-  { id: 'notepadpp', name: t('app_notepadpp'), description: t('app_notepadpp_desc'), icon: FileText, category: 'utilities', version: '8.6.2', size: '5 MB', selected: false, installed: false, wingetId: 'Notepad++.Notepad++' },
-  { id: 'everything', name: t('app_everything'), description: t('app_everything_desc'), icon: Search, category: 'utilities', version: '1.4.1', size: '1.5 MB', selected: false, installed: false, wingetId: 'voidtools.Everything' },
+    // Media
+    { id: 'vlc', name: t('app_vlc'), description: t('app_vlc_desc'), icon: Film, category: 'media', selected: false, installed: false, wingetId: 'VideoLAN.VLC' },
+    { id: 'spotify', name: t('app_spotify'), description: t('app_spotify_desc'), icon: Music, category: 'media', selected: false, installed: false, wingetId: 'Spotify.Spotify' },
+    { id: 'gimp', name: t('app_gimp'), description: t('app_gimp_desc'), icon: Image, category: 'media', selected: false, installed: false, wingetId: 'GIMP.GIMP.2' },
+    { id: 'obs', name: t('app_obs'), description: t('app_obs_desc'), icon: Film, category: 'media', selected: false, installed: false, wingetId: 'OBSProject.OBSStudio' },
+    { id: 'audacity', name: t('app_audacity'), description: t('app_audacity_desc'), icon: Music, category: 'media', selected: false, installed: false, wingetId: 'Audacity.Audacity' },
+    { id: 'blender', name: t('app_blender'), description: t('app_blender_desc'), icon: Image, category: 'media', selected: false, installed: false, wingetId: 'BlenderFoundation.Blender' },
+    { id: 'handbrake', name: t('app_handbrake'), description: t('app_handbrake_desc'), icon: Film, category: 'media', selected: false, installed: false, wingetId: 'HandBrake.HandBrake' },
 
-  // Communication
-  { id: 'discord', name: t('app_discord'), description: t('app_discord_desc'), icon: MessageSquare, category: 'communication', version: '0.0.38', size: '85 MB', selected: false, installed: false, wingetId: 'Discord.Discord' },
-  { id: 'slack', name: t('app_slack'), description: t('app_slack_desc'), icon: MessageSquare, category: 'communication', version: '4.36', size: '112 MB', selected: false, installed: false, wingetId: 'SlackTechnologies.Slack' },
-  { id: 'telegram', name: t('app_telegram'), description: t('app_telegram_desc'), icon: MessageSquare, category: 'communication', version: '4.14', size: '45 MB', selected: false, installed: false, wingetId: 'Telegram.TelegramDesktop' },
+    // Utilities
+    { id: '7zip', name: t('app_7zip'), description: t('app_7zip_desc'), icon: Folder, category: 'utilities', selected: false, installed: false, wingetId: '7zip.7zip' },
+    { id: 'notepadpp', name: t('app_notepadpp'), description: t('app_notepadpp_desc'), icon: FileText, category: 'utilities', selected: false, installed: false, wingetId: 'Notepad++.Notepad++' },
+    { id: 'everything', name: t('app_everything'), description: t('app_everything_desc'), icon: Search, category: 'utilities', selected: false, installed: false, wingetId: 'voidtools.Everything' },
+    { id: 'powertoys', name: t('app_powertoys'), description: t('app_powertoys_desc'), icon: Folder, category: 'utilities', selected: false, installed: false, wingetId: 'Microsoft.PowerToys' },
+    { id: 'winrar', name: t('app_winrar'), description: t('app_winrar_desc'), icon: Folder, category: 'utilities', selected: false, installed: false, wingetId: 'RARLab.WinRAR' },
+    { id: 'rufus', name: t('app_rufus'), description: t('app_rufus_desc'), icon: Folder, category: 'utilities', selected: false, installed: false, wingetId: 'Rufus.Rufus' },
+    { id: 'qbittorrent', name: t('app_qbittorrent'), description: t('app_qbittorrent_desc'), icon: Download, category: 'utilities', selected: false, installed: false, wingetId: 'qBittorrent.qBittorrent' },
+    { id: 'winscp', name: t('app_winscp'), description: t('app_winscp_desc'), icon: Folder, category: 'utilities', selected: false, installed: false, wingetId: 'WinSCP.WinSCP' },
+    { id: 'teamviewer', name: t('app_teamviewer'), description: t('app_teamviewer_desc'), icon: Folder, category: 'utilities', selected: false, installed: false, wingetId: 'TeamViewer.TeamViewer' },
+    { id: 'anydesk', name: t('app_anydesk'), description: t('app_anydesk_desc'), icon: Folder, category: 'utilities', selected: false, installed: false, wingetId: 'AnyDesk.AnyDesk' },
+    { id: 'googledrive', name: t('app_googledrive'), description: t('app_googledrive_desc'), icon: Cloud, category: 'utilities', selected: false, installed: false, wingetId: 'Google.GoogleDrive' },
+    { id: 'dropbox', name: t('app_dropbox'), description: t('app_dropbox_desc'), icon: Cloud, category: 'utilities', selected: false, installed: false, wingetId: 'Dropbox.Dropbox' },
+    { id: 'notion', name: t('app_notion'), description: t('app_notion_desc'), icon: FileText, category: 'utilities', selected: false, installed: false, wingetId: 'Notion.Notion' },
+    { id: 'obsidian', name: t('app_obsidian'), description: t('app_obsidian_desc'), icon: FileText, category: 'utilities', selected: false, installed: false, wingetId: 'Obsidian.Obsidian' },
 
-  // Security
-  { id: 'bitwarden', name: t('app_bitwarden'), description: t('app_bitwarden_desc'), icon: Shield, category: 'security', version: '2024.1', size: '95 MB', selected: false, installed: false, wingetId: 'Bitwarden.Bitwarden' },
-  { id: 'malwarebytes', name: t('app_malwarebytes'), description: t('app_malwarebytes_desc'), icon: Shield, category: 'security', version: '4.6.7', size: '256 MB', selected: false, installed: false, wingetId: 'Malwarebytes.Malwarebytes' },
+    // Communication
+    { id: 'discord', name: t('app_discord'), description: t('app_discord_desc'), icon: MessageSquare, category: 'communication', selected: false, installed: false, wingetId: 'Discord.Discord' },
+    { id: 'slack', name: t('app_slack'), description: t('app_slack_desc'), icon: MessageSquare, category: 'communication', selected: false, installed: false, wingetId: 'SlackTechnologies.Slack' },
+    { id: 'telegram', name: t('app_telegram'), description: t('app_telegram_desc'), icon: MessageSquare, category: 'communication', selected: false, installed: false, wingetId: 'Telegram.TelegramDesktop' },
+    { id: 'zoom', name: t('app_zoom'), description: t('app_zoom_desc'), icon: MessageSquare, category: 'communication', selected: false, installed: false, wingetId: 'Zoom.Zoom' },
+    { id: 'teams', name: t('app_teams'), description: t('app_teams_desc'), icon: MessageSquare, category: 'communication', selected: false, installed: false, wingetId: 'Microsoft.Teams' },
+    { id: 'signal', name: t('app_signal'), description: t('app_signal_desc'), icon: MessageSquare, category: 'communication', selected: false, installed: false, wingetId: 'OpenWhisperSystems.Signal' },
 
-  // Gaming
-  { id: 'steam', name: t('app_steam'), description: t('app_steam_desc'), icon: Gamepad2, category: 'gaming', version: 'Latest', size: '3 MB', selected: false, installed: false, wingetId: 'Valve.Steam' },
-  { id: 'epicgames', name: t('app_epic'), description: t('app_epic_desc'), icon: Gamepad2, category: 'gaming', version: 'Latest', size: '45 MB', selected: false, installed: false, wingetId: 'EpicGames.EpicGamesLauncher' },
-]);
+    // Security
+    { id: 'bitwarden', name: t('app_bitwarden'), description: t('app_bitwarden_desc'), icon: Shield, category: 'security', selected: false, installed: false, wingetId: 'Bitwarden.Bitwarden' },
+    { id: 'malwarebytes', name: t('app_malwarebytes'), description: t('app_malwarebytes_desc'), icon: Shield, category: 'security', selected: false, installed: false, wingetId: 'Malwarebytes.Malwarebytes' },
+    { id: 'openvpn', name: t('app_openvpn'), description: t('app_openvpn_desc'), icon: Shield, category: 'security', selected: false, installed: false, wingetId: 'OpenVPNTechnologies.OpenVPN' },
+    { id: 'wireguard', name: t('app_wireguard'), description: t('app_wireguard_desc'), icon: Shield, category: 'security', selected: false, installed: false, wingetId: 'WireGuard.WireGuard' },
+    { id: 'keepass', name: t('app_keepass'), description: t('app_keepass_desc'), icon: Shield, category: 'security', selected: false, installed: false, wingetId: 'DominikReichl.KeePass' },
+
+    // Gaming
+    { id: 'steam', name: t('app_steam'), description: t('app_steam_desc'), icon: Gamepad2, category: 'gaming', selected: false, installed: false, wingetId: 'Valve.Steam' },
+    { id: 'epicgames', name: t('app_epic'), description: t('app_epic_desc'), icon: Gamepad2, category: 'gaming', selected: false, installed: false, wingetId: 'EpicGames.EpicGamesLauncher' },
+    { id: 'gog', name: t('app_gog'), description: t('app_gog_desc'), icon: Gamepad2, category: 'gaming', selected: false, installed: false, wingetId: 'GOG.Galaxy' },
+    { id: 'battlenet', name: t('app_battlenet'), description: t('app_battlenet_desc'), icon: Gamepad2, category: 'gaming', selected: false, installed: false, wingetId: 'Blizzard.BattleNet' },
+    { id: 'ubisoft', name: t('app_ubisoft'), description: t('app_ubisoft_desc'), icon: Gamepad2, category: 'gaming', selected: false, installed: false, wingetId: 'Ubisoft.Connect' },
+    { id: 'ea', name: t('app_ea'), description: t('app_ea_desc'), icon: Gamepad2, category: 'gaming', selected: false, installed: false, wingetId: 'ElectronicArts.EADesktop' }
+  ];
+
+  const existingIds = new Set(base.map((app) => app.id));
+  const existingWinget = new Set(base.map((app) => app.wingetId.toLowerCase()));
+
+  const extras = Object.entries(toolboxApps)
+    .filter(([, app]) => !!app.winget)
+    .filter(([id, app]) => !existingIds.has(id) && !existingWinget.has((app.winget as string).toLowerCase()))
+    .map(([id, app]) => {
+      const mappedCategory = mapToolboxCategory(app.category);
+      return {
+        id,
+        name: app.content,
+        description: app.description,
+        icon: categoryIcons[mappedCategory] || Package,
+        category: mappedCategory,
+        selected: false,
+        installed: false,
+        wingetId: app.winget as string
+      };
+    });
+
+  return [...base, ...extras];
+};
 
 const AppCard = ({
   app,
@@ -133,10 +241,7 @@ const AppCard = ({
           <p className="text-muted" style={{ fontSize: 'var(--text-xs)', marginTop: '2px' }}>
             {app.description}
           </p>
-          <div className="flex items-center gap-md mt-sm">
-            <span className="text-muted" style={{ fontSize: 'var(--text-xs)' }}>v{app.version}</span>
-            <span className="text-muted" style={{ fontSize: 'var(--text-xs)' }}>{app.size}</span>
-          </div>
+          <div className="flex items-center gap-md mt-sm" />
         </div>
 
         <div
@@ -159,10 +264,17 @@ const AppCard = ({
   );
 };
 
-export default function Installer({ showToast }: InstallerProps) {
+export default function Installer({ showToast, externalQuery }: InstallerProps) {
   const { t } = useI18n();
   const [apps, setApps] = useState(buildApps(t));
   const [searchQuery, setSearchQuery] = useState('');
+
+  useEffect(() => {
+    if (typeof externalQuery === 'string') {
+      setSearchQuery(externalQuery);
+    }
+  }, [externalQuery]);
+
   const [activeCategory, setActiveCategory] = useState('all');
   const [isInstalling, setIsInstalling] = useState(false);
   const [isScanning, setIsScanning] = useState(true);
@@ -225,10 +337,6 @@ export default function Installer({ showToast }: InstallerProps) {
 
   const selectedApps = apps.filter(app => app.selected);
   const selectedCount = selectedApps.length;
-  const totalSize = selectedApps.reduce((acc, app) => {
-    const size = parseFloat(app.size);
-    return acc + (isNaN(size) ? 0 : size);
-  }, 0);
 
   const toggleApp = (id: string) => {
     setApps(prev => prev.map(app =>
@@ -296,6 +404,13 @@ export default function Installer({ showToast }: InstallerProps) {
             a.id === app.id ? { ...a, installed: true, selected: false } : a
           ));
           alreadyInstalledCount++;
+        } else if (errorStr.includes('0x80190193') || errorStr.includes('403')) {
+          console.error(`Download blocked for ${app.name}:`, errorStr);
+          setApps(prev => prev.map(a =>
+            a.id === app.id ? { ...a, selected: false } : a
+          ));
+          failCount++;
+          showToast('error', t('installer_error'), `${app.name}: download blocked (403)`);
         } else if (errorStr.includes('No package found')) {
           console.error(`Package not found: ${app.name} (${app.wingetId})`);
           setApps(prev => prev.map(a =>
@@ -477,10 +592,7 @@ export default function Installer({ showToast }: InstallerProps) {
                   <span className="text-muted" style={{ fontSize: 'var(--text-xs)' }}>{t('installer_apps')}</span>
                   <span className="font-mono" style={{ color: 'var(--text-90)' }}>{selectedCount}</span>
                 </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-muted" style={{ fontSize: 'var(--text-xs)' }}>{t('total_size')}</span>
-                  <span className="font-mono" style={{ color: 'var(--text-90)' }}>~{totalSize.toFixed(0)} MB</span>
-                </div>
+                <div className="flex items-center justify-between" />
               </div>
             </>
           )}

@@ -1,0 +1,313 @@
+﻿{
+  "WPFFeaturesdotnet": {
+    "Content": "All .Net Framework (2,3,4)",
+    "Description": ".NET and .NET Framework is a developer platform made up of tools, programming languages, and libraries for building many different types of applications.",
+    "category": "Features",
+    "panel": "1",
+    "Order": "a010_",
+    "feature": [
+      "NetFx4-AdvSrvs",
+      "NetFx3"
+    ],
+    "InvokeScript": [],
+    "link": "https://confutils.app/dev/features/features/dotnet"
+  },
+  "WPFFeatureshyperv": {
+    "Content": "HyperV Virtualization",
+    "Description": "Hyper-V is a hardware virtualization product developed by Microsoft that allows users to create and manage virtual machines.",
+    "category": "Features",
+    "panel": "1",
+    "Order": "a011_",
+    "feature": [
+      "Microsoft-Hyper-V-All"
+    ],
+    "InvokeScript": [
+      "bcdedit /set hypervisorschedulertype classic"
+    ],
+    "link": "https://confutils.app/dev/features/features/hyperv"
+  },
+  "WPFFeatureslegacymedia": {
+    "Content": "Legacy Media (WMP, DirectPlay)",
+    "Description": "Enables legacy programs from previous versions of windows",
+    "category": "Features",
+    "panel": "1",
+    "Order": "a012_",
+    "feature": [
+      "WindowsMediaPlayer",
+      "MediaPlayback",
+      "DirectPlay",
+      "LegacyComponents"
+    ],
+    "InvokeScript": [],
+    "link": "https://confutils.app/dev/features/features/legacymedia"
+  },
+  "WPFFeaturewsl": {
+    "Content": "Windows Subsystem for Linux",
+    "Description": "Windows Subsystem for Linux is an optional feature of Windows that allows Linux programs to run natively on Windows without the need for a separate virtual machine or dual booting.",
+    "category": "Features",
+    "panel": "1",
+    "Order": "a020_",
+    "feature": [
+      "VirtualMachinePlatform",
+      "Microsoft-Windows-Subsystem-Linux"
+    ],
+    "InvokeScript": [],
+    "link": "https://confutils.app/dev/features/features/wsl"
+  },
+  "WPFFeaturenfs": {
+    "Content": "NFS - Network File System",
+    "Description": "Network File System (NFS) is a mechanism for storing files on a network.",
+    "category": "Features",
+    "panel": "1",
+    "Order": "a014_",
+    "feature": [
+      "ServicesForNFS-ClientOnly",
+      "ClientForNFS-Infrastructure",
+      "NFS-Administration"
+    ],
+    "InvokeScript": [
+      "nfsadmin client stop",
+      "Set-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\ClientForNFS\\CurrentVersion\\Default' -Name 'AnonymousUID' -Type DWord -Value 0",
+      "Set-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\ClientForNFS\\CurrentVersion\\Default' -Name 'AnonymousGID' -Type DWord -Value 0",
+      "nfsadmin client start",
+      "nfsadmin client localhost config fileaccess=755 SecFlavors=+sys -krb5 -krb5i"
+    ],
+    "link": "https://confutils.app/dev/features/features/nfs"
+  },
+  "WPFFeatureRegBackup": {
+    "Content": "Enable Daily Registry Backup Task 12.30am",
+    "Description": "Enables daily registry backup, previously disabled by Microsoft in Windows 10 1803.",
+    "category": "Features",
+    "panel": "1",
+    "Order": "a017_",
+    "feature": [],
+    "InvokeScript": [
+      "\n      New-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Configuration Manager' -Name 'EnablePeriodicBackup' -Type DWord -Value 1 -Force\n      New-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Configuration Manager' -Name 'BackupCount' -Type DWord -Value 2 -Force\n      $action = New-ScheduledTaskAction -Execute 'schtasks' -Argument '/run /i /tn \"\\Microsoft\\Windows\\Registry\\RegIdleBackup\"'\n      $trigger = New-ScheduledTaskTrigger -Daily -At 00:30\n      Register-ScheduledTask -Action $action -Trigger $trigger -TaskName 'AutoRegBackup' -Description 'Create System Registry Backups' -User 'System'\n      "
+    ],
+    "link": "https://confutils.app/dev/features/features/regbackup"
+  },
+  "WPFFeatureEnableLegacyRecovery": {
+    "Content": "Enable Legacy F8 Boot Recovery",
+    "Description": "Enables Advanced Boot Options screen that lets you start Windows in advanced troubleshooting modes.",
+    "category": "Features",
+    "panel": "1",
+    "Order": "a018_",
+    "feature": [],
+    "InvokeScript": [
+      "bcdedit /set bootmenupolicy legacy"
+    ],
+    "link": "https://confutils.app/dev/features/features/enablelegacyrecovery"
+  },
+  "WPFFeatureDisableLegacyRecovery": {
+    "Content": "Disable Legacy F8 Boot Recovery",
+    "Description": "Disables Advanced Boot Options screen that lets you start Windows in advanced troubleshooting modes.",
+    "category": "Features",
+    "panel": "1",
+    "Order": "a019_",
+    "feature": [],
+    "InvokeScript": [
+    "bcdedit /set bootmenupolicy standard"
+    ],
+    "link": "https://confutils.app/dev/features/features/disablelegacyrecovery"
+  },
+  "WPFFeaturesSandbox": {
+    "Content": "Windows Sandbox",
+    "Description": "Windows Sandbox is a lightweight virtual machine that provides a temporary desktop environment to safely run applications and programs in isolation.",
+    "category": "Features",
+    "panel": "1",
+    "Order": "a021_",
+    "feature": [
+      "Containers-DisposableClientVM"
+    ],
+    "link": "https://confutils.app/dev/features/features/sandbox"
+  },
+  "WPFFeatureInstall": {
+    "Content": "Install Features",
+    "Description": "Open Windows optional features dialog to add or remove system components.",
+    "category": "Features",
+    "panel": "1",
+    "Order": "a060_",
+    "Type": "Button",
+    "ButtonWidth": "300",
+    "link": "https://confutils.app/dev/features/features/install"
+  },
+  "WPFPanelAutologin": {
+    "Content": "Set Up Autologin",
+    "Description": "Open the autologin dialog to configure automatic sign-in for a local account.",
+    "category": "Fixes",
+    "Order": "a040_",
+    "panel": "1",
+    "Type": "Button",
+    "ButtonWidth": "300",
+    "link": "https://confutils.app/dev/features/fixes/autologin"
+  },
+  "WPFFixesUpdate": {
+    "Content": "Reset Windows Update",
+    "Description": "Reset Windows Update services and clear update cache to fix update issues.",
+    "category": "Fixes",
+    "panel": "1",
+    "Order": "a041_",
+    "Type": "Button",
+    "ButtonWidth": "300",
+    "link": "https://confutils.app/dev/features/fixes/update"
+  },
+  "WPFFixesNetwork": {
+    "Content": "Reset Network",
+    "Description": "Flush DNS and reset Winsock/TCP/IP to resolve common network problems.",
+    "category": "Fixes",
+    "Order": "a042_",
+    "panel": "1",
+    "Type": "Button",
+    "ButtonWidth": "300",
+    "link": "https://confutils.app/dev/features/fixes/network"
+  },
+  "WPFPanelDISM": {
+    "Content": "System Corruption Scan",
+    "Description": "Run DISM and SFC to repair corrupted Windows system files.",
+    "category": "Fixes",
+    "panel": "1",
+    "Order": "a043_",
+    "Type": "Button",
+    "ButtonWidth": "300",
+    "link": "https://confutils.app/dev/features/fixes/dism"
+  },
+  "WPFFixesWinget": {
+    "Content": "WinGet Reinstall",
+    "Description": "Repair WinGet sources or reinstall the Desktop App Installer if needed.",
+    "category": "Fixes",
+    "panel": "1",
+    "Order": "a044_",
+    "Type": "Button",
+    "ButtonWidth": "300",
+    "link": "https://confutils.app/dev/features/fixes/winget"
+  },
+  "WPFRunAdobeCCCleanerTool": {
+    "Content": "Remove Adobe Creative Cloud",
+    "Description": "Run Adobe CC Cleaner Tool to remove Creative Cloud components.",
+    "category": "Fixes",
+    "panel": "1",
+    "Order": "a045_",
+    "Type": "Button",
+    "ButtonWidth": "300",
+    "link": "https://confutils.app/dev/features/fixes/runadobecccleanertool"
+  },
+  "WPFPanelControl": {
+    "Content": "Control Panel",
+    "Description": "Open the classic Control Panel.",
+    "category": "Legacy Windows Panels",
+    "panel": "2",
+    "Type": "Button",
+    "ButtonWidth": "300",
+    "link": "https://confutils.app/dev/features/legacy-windows-panels/control"
+  },
+  "WPFPanelComputer": {
+    "Content": "Computer Management",
+    "Description": "Open the Computer Management console.",
+    "category": "Legacy Windows Panels",
+    "panel": "2",
+    "Type": "Button",
+    "ButtonWidth": "300",
+    "link": "https://confutils.app/dev/features/legacy-windows-panels/computer"
+  },
+  "WPFPanelNetwork": {
+    "Content": "Network Connections",
+    "Description": "Open the Network Connections panel (ncpa.cpl).",
+    "category": "Legacy Windows Panels",
+    "panel": "2",
+    "Type": "Button",
+    "ButtonWidth": "300",
+    "link": "https://confutils.app/dev/features/legacy-windows-panels/network"
+  },
+  "WPFPanelPower": {
+    "Content": "Power Panel",
+    "Description": "Open Power Options.",
+    "category": "Legacy Windows Panels",
+    "panel": "2",
+    "Type": "Button",
+    "ButtonWidth": "300",
+    "link": "https://confutils.app/dev/features/legacy-windows-panels/power"
+  },
+  "WPFPanelPrinter": {
+    "Content": "Printer Panel",
+    "Description": "Open Devices and Printers.",
+    "category": "Legacy Windows Panels",
+    "panel": "2",
+    "Type": "Button",
+    "ButtonWidth": "300",
+    "link": "https://confutils.app/dev/features/legacy-windows-panels/printer"
+  },
+  "WPFPanelRegion": {
+    "Content": "Region",
+    "Description": "Open Region settings (intl.cpl).",
+    "category": "Legacy Windows Panels",
+    "panel": "2",
+    "Type": "Button",
+    "ButtonWidth": "300",
+    "link": "https://confutils.app/dev/features/legacy-windows-panels/region"
+  },
+  "WPFPanelRestore": {
+    "Content": "Windows Restore",
+    "Description": "Open the System Restore wizard.",
+    "category": "Legacy Windows Panels",
+    "panel": "2",
+    "Type": "Button",
+    "ButtonWidth": "300",
+    "link": "https://confutils.app/dev/features/legacy-windows-panels/restore"
+  },
+  "WPFPanelSound": {
+    "Content": "Sound Settings",
+    "Description": "Open the Sound control panel.",
+    "category": "Legacy Windows Panels",
+    "panel": "2",
+    "Type": "Button",
+    "ButtonWidth": "300",
+    "link": "https://confutils.app/dev/features/legacy-windows-panels/user"
+  },
+  "WPFPanelSystem": {
+    "Content": "System Properties",
+    "Description": "Open System Properties (advanced).",
+    "category": "Legacy Windows Panels",
+    "panel": "2",
+    "Type": "Button",
+    "ButtonWidth": "300",
+    "link": "https://confutils.app/dev/features/legacy-windows-panels/system"
+  },
+  "WPFPanelTimedate": {
+    "Content": "Time and Date",
+    "Description": "Open Date and Time settings.",
+    "category": "Legacy Windows Panels",
+    "panel": "2",
+    "Type": "Button",
+    "ButtonWidth": "300",
+    "link": "https://confutils.app/dev/features/legacy-windows-panels/timedate"
+  },
+  "WPFInstallPSProfile": {
+    "Content": "Install CTT PowerShell Profile",
+    "Description": "Download and install the Chris Titus Tech PowerShell profile.",
+    "category": "Powershell Profile",
+    "panel": "2",
+    "Order": "a083_",
+    "Type": "Button",
+    "ButtonWidth": "300"
+  },
+  "WPFUninstallPSProfile": {
+    "Content": "Uninstall CTT PowerShell Profile",
+    "Description": "Remove the installed PowerShell profile from the current user.",
+    "category": "Powershell Profile",
+    "panel": "2",
+    "Order": "a084_",
+    "Type": "Button",
+    "ButtonWidth": "300"
+  },
+  "WPFSSHServer": {
+    "Content": "Enable OpenSSH Server",
+    "Description": "Install and start the OpenSSH Server service for remote access.",
+    "category": "Remote Access",
+    "panel": "2",
+    "Order": "a084_",
+    "Type": "Button",
+    "ButtonWidth": "300"
+  }
+}
+
+

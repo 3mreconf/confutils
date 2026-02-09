@@ -8,6 +8,7 @@ use winreg::RegKey;
 use std::os::windows::process::CommandExt;
 
 use crate::security::*;
+use crate::taskbar;
 
 fn check_auth() -> Result<(), String> {
     Ok(())
@@ -6280,4 +6281,15 @@ pub async fn check_online_status() -> Result<bool, String> {
     .map_err(|e| format!("Online check task failed: {}", e))?;
 
     Ok(check)
+}
+
+#[tauri::command]
+pub async fn install_translucenttb() -> Result<String, String> {
+    taskbar::install_translucenttb()
+}
+
+#[tauri::command]
+pub async fn set_taskbar_appearance(mode: String, color: String, opacity: u8) -> Result<String, String> {
+    taskbar::set_taskbar_appearance(mode, color, opacity)?;
+    Ok("Taskbar appearance applied".to_string())
 }

@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { invoke } from '@tauri-apps/api/core';
 import {
   Cpu,
   HardDrive,
@@ -230,58 +231,295 @@ const ProcessItem = ({
 
 export default function SystemMonitor({ showToast: _showToast }: SystemMonitorProps) {
   const { t } = useI18n();
-  const [cpuHistory, setCpuHistory] = useState<number[]>(Array(60).fill(30));
-  const [memHistory, setMemHistory] = useState<number[]>(Array(60).fill(55));
-  const [diskHistory, setDiskHistory] = useState<number[]>(Array(60).fill(45));
-  const [netHistory, setNetHistory] = useState<number[]>(Array(60).fill(20));
+  const HISTORY_POINTS = 30;
+  const [cpuHistory, setCpuHistory] = useState<number[]>(Array(HISTORY_POINTS).fill(0));
+  const [memHistory, setMemHistory] = useState<number[]>(Array(HISTORY_POINTS).fill(0));
+  const [diskHistory, setDiskHistory] = useState<number[]>(Array(HISTORY_POINTS).fill(0));
+  const [netHistory, setNetHistory] = useState<number[]>(Array(HISTORY_POINTS).fill(0));
 
   const [currentStats, setCurrentStats] = useState({
-    cpu: 34,
-    memory: 62,
-    disk: 48,
-    network: 25,
-    uptime: '4d 12h 34m',
-    processes: 156,
-    threads: 2341,
-    handles: 89234
+    cpu: 0,
+    memory: 0,
+    disk: 0,
+    network: 0,
+    uptime: '0m',
+    processes: 0,
+    threads: 0,
+    handles: 0,
+    memUsedGB: 0,
+    memFreeGB: 0,
+    memTotalGB: 0,
+    diskUsedGB: 0,
+    diskFreeGB: 0,
+    diskTotalGB: 0,
+    netDownMB: 0,
+    netUpMB: 0,
+    netLatencyMs: null as number | null,
+    cpuCores: 0,
+    cpuSpeedGHz: 0,
+    cpuBaseGHz: 0,
+    netMaxBps: 0
   });
 
-  // Simulate real-time updates
+  const [processes, setProcesses] = useState<
+    { name: string; cpu: number; memory: number; pid: number }[]
+  >([]);
+  const processCpuRef = useRef<{ time: number; cpu: Map<number, number> }>({
+    time: 0,
+    cpu: new Map()
+  });
+  const netMaxBpsRef = useRef(0);
+  const isVisibleRef = useRef(true);
+
+  const safeJson = <T,>(raw: unknown, fallback: T): T => {
+    if (!raw) return fallback;
+    if (typeof raw !== 'string') return raw as T;
+    try {
+      return JSON.parse(raw) as T;
+    } catch {
+      return fallback;
+    }
+  };
+
+  const formatUptime = (uptime: { Days: number; Hours: number; Minutes: number }) =>
+    `${uptime.Days}d ${uptime.Hours}h ${uptime.Minutes}m`;
+
+  const formatGb = (value: number) => value.toFixed(1);
+
+  const fetchCpuInfo = async () => {
+    const command = `
+      $cpu = Get-CimInstance Win32_Processor | Select-Object -First 1 Name, NumberOfLogicalProcessors, MaxClockSpeed, CurrentClockSpeed
+      if ($cpu) {
+        @{Cores=$cpu.NumberOfLogicalProcessors;MaxGHz=[math]::Round($cpu.MaxClockSpeed/1000,2);CurrentGHz=[math]::Round($cpu.CurrentClockSpeed/1000,2)} | ConvertTo-Json -Compress
+      } else {
+        @{Cores=0;MaxGHz=0;CurrentGHz=0} | ConvertTo-Json -Compress
+      }
+    `;
+    const data = safeJson<{ Cores: number; MaxGHz: number; CurrentGHz: number }>(
+      await invoke('run_powershell', { command }),
+      { Cores: 0, MaxGHz: 0, CurrentGHz: 0 }
+    );
+    setCurrentStats(prev => ({
+      ...prev,
+      cpuCores: data.Cores || 0,
+      cpuSpeedGHz: data.CurrentGHz || 0,
+      cpuBaseGHz: data.MaxGHz || 0
+    }));
+  };
+
+  const fetchNetworkStats = async () => {
+    const command = `
+      $ctr = Get-Counter '\\Network Interface(*)\\Bytes Received/sec','\\Network Interface(*)\\Bytes Sent/sec'
+      $samples = $ctr.CounterSamples | Where-Object {
+        $_.InstanceName -notlike "*isatap*" -and $_.InstanceName -notlike "*Loopback*" -and $_.InstanceName -notlike "*Teredo*"
+      }
+      $down = ($samples | Where-Object { $_.Path -like "*Bytes Received/sec" } | Measure-Object -Property CookedValue -Sum).Sum
+      $up = ($samples | Where-Object { $_.Path -like "*Bytes Sent/sec" } | Measure-Object -Property CookedValue -Sum).Sum
+      @{DownBytesPerSec=$down;UpBytesPerSec=$up} | ConvertTo-Json -Compress
+    `;
+    const net = safeJson<{ DownBytesPerSec: number; UpBytesPerSec: number }>(
+      await invoke('run_powershell', { command }),
+      { DownBytesPerSec: 0, UpBytesPerSec: 0 }
+    );
+    const downMB = Math.max(0, (net.DownBytesPerSec || 0) / (1024 * 1024));
+    const upMB = Math.max(0, (net.UpBytesPerSec || 0) / (1024 * 1024));
+    const totalBytes = (net.DownBytesPerSec || 0) + (net.UpBytesPerSec || 0);
+    const netPercent =
+      netMaxBpsRef.current > 0
+        ? Math.min(100, (totalBytes * 8 * 100) / netMaxBpsRef.current)
+        : 0;
+    setNetHistory(h => [...h.slice(1), netPercent]);
+    setCurrentStats(prev => ({
+      ...prev,
+      network: netPercent,
+      netDownMB: downMB,
+      netUpMB: upMB
+    }));
+  };
+
+  const fetchNetworkLatency = async () => {
+    const command = `
+      $lat = (Test-Connection -ComputerName 1.1.1.1 -Count 1 -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty ResponseTime)
+      @{Latency=$lat} | ConvertTo-Json -Compress
+    `;
+    const data = safeJson<{ Latency: number | null }>(
+      await invoke('run_powershell', { command }),
+      { Latency: null }
+    );
+    setCurrentStats(prev => ({
+      ...prev,
+      netLatencyMs: typeof data.Latency === 'number' ? data.Latency : null
+    }));
+  };
+  const fetchNetworkSpeed = async () => {
+    const command = `
+      $adapters = Get-CimInstance Win32_NetworkAdapter | Where-Object { $_.NetEnabled -eq $true -and $_.Speed -gt 0 }
+      $max = ($adapters | Measure-Object -Property Speed -Maximum).Maximum
+      @{MaxSpeed=$max} | ConvertTo-Json -Compress
+    `;
+    const data = safeJson<{ MaxSpeed: number }>(
+      await invoke('run_powershell', { command }),
+      { MaxSpeed: 0 }
+    );
+    netMaxBpsRef.current = data.MaxSpeed || 0;
+    setCurrentStats(prev => ({
+      ...prev,
+      netMaxBps: data.MaxSpeed || 0
+    }));
+  };
+
+  const fetchUsage = async () => {
+    const [cpuRaw, memRaw] = await Promise.all([
+      invoke('get_cpu_usage'),
+      invoke('get_memory_usage')
+    ]);
+    const cpu = safeJson<{ Usage: number }>(cpuRaw, { Usage: 0 });
+    const mem = safeJson<{ Total: number; Used: number; Free: number; Percent: number }>(memRaw, {
+      Total: 0,
+      Used: 0,
+      Free: 0,
+      Percent: 0
+    });
+    const cpuUsage = Math.max(0, Math.min(100, cpu.Usage || 0));
+    const memPercent = Math.max(0, Math.min(100, mem.Percent || 0));
+    const memTotalGB = (mem.Total || 0) / 1024;
+    const memUsedGB = (mem.Used || 0) / 1024;
+    const memFreeGB = (mem.Free || 0) / 1024;
+    setCpuHistory(h => [...h.slice(1), cpuUsage]);
+    setMemHistory(h => [...h.slice(1), memPercent]);
+    setCurrentStats(prev => ({
+      ...prev,
+      cpu: cpuUsage,
+      memory: memPercent,
+      memTotalGB,
+      memUsedGB,
+      memFreeGB
+    }));
+  };
+
+  const fetchDiskAndUptime = async () => {
+    const [diskRaw, uptimeRaw] = await Promise.all([
+      invoke('get_disk_info'),
+      invoke('get_uptime')
+    ]);
+    const disk = safeJson<any>(diskRaw, []);
+    const disks = Array.isArray(disk) ? disk : disk ? [disk] : [];
+    const totals = disks.reduce(
+      (acc, d) => {
+        acc.total += Number(d.SizeGB || 0);
+        acc.free += Number(d.FreeSpaceGB || 0);
+        acc.used += Number(d.UsedSpaceGB || 0);
+        return acc;
+      },
+      { total: 0, free: 0, used: 0 }
+    );
+    const diskPercent = totals.total > 0 ? Math.min(100, (totals.used / totals.total) * 100) : 0;
+    setDiskHistory(h => [...h.slice(1), diskPercent]);
+    const uptime = safeJson<{ Days: number; Hours: number; Minutes: number }>(uptimeRaw, {
+      Days: 0,
+      Hours: 0,
+      Minutes: 0
+    });
+    setCurrentStats(prev => ({
+      ...prev,
+      disk: diskPercent,
+      diskTotalGB: totals.total,
+      diskUsedGB: totals.used,
+      diskFreeGB: totals.free,
+      uptime: formatUptime(uptime)
+    }));
+  };
+
+  const fetchProcessStats = async () => {
+    const command = `
+      $procs = Get-Process
+      $top = $procs | Sort-Object CPU -Descending | Select-Object -First 12 Id, ProcessName, CPU, @{Name="MemoryMB";Expression={[math]::Round($_.WorkingSet64/1MB,2)}}
+      $handles = ($procs | Measure-Object -Property Handles -Sum).Sum
+      $threads = ($procs | ForEach-Object { $_.Threads.Count } | Measure-Object -Sum).Sum
+      @{Total=$procs.Count;Threads=$threads;Handles=$handles;Top=$top} | ConvertTo-Json -Compress
+    `;
+    const payload = safeJson<any>(await invoke('run_powershell', { command }), {});
+    const listRaw = payload.Top ?? [];
+    const list = Array.isArray(listRaw) ? listRaw : listRaw ? [listRaw] : [];
+    const now = performance.now();
+    const prev = processCpuRef.current;
+    const deltaSeconds = prev.time > 0 ? (now - prev.time) / 1000 : 0;
+    const nextMap = new Map<number, number>();
+    const cores = Math.max(1, navigator.hardwareConcurrency || 1);
+    const computed = list.map((p: { Id: number; ProcessName: string; CPU: number; MemoryMB: number }) => {
+      const cpuTime = Number(p.CPU || 0);
+      const prevCpu = prev.cpu.get(p.Id) ?? cpuTime;
+      const deltaCpu = cpuTime - prevCpu;
+      const cpuPercent =
+        deltaSeconds > 0 && deltaCpu >= 0
+          ? Math.min(100, (deltaCpu / deltaSeconds / cores) * 100)
+          : 0;
+      nextMap.set(p.Id, cpuTime);
+      return {
+        name: p.ProcessName || 'Unknown',
+        cpu: cpuPercent,
+        memory: Math.round(Number(p.MemoryMB || 0)),
+        pid: p.Id
+      };
+    });
+    processCpuRef.current = { time: now, cpu: nextMap };
+    const top = computed.sort((a, b) => b.cpu - a.cpu).slice(0, 8);
+    setProcesses(top);
+    setCurrentStats(prev => ({
+      ...prev,
+      processes: Number(payload.Total || list.length || 0),
+      threads: Number(payload.Threads || 0),
+      handles: Number(payload.Handles || 0)
+    }));
+  };
+
   useEffect(() => {
-    const interval = setInterval(() => {
-      setCurrentStats(prev => {
-        const newCpu = Math.min(100, Math.max(5, prev.cpu + (Math.random() - 0.5) * 20));
-        const newMem = Math.min(95, Math.max(30, prev.memory + (Math.random() - 0.5) * 8));
-        const newDisk = Math.min(100, Math.max(20, prev.disk + (Math.random() - 0.5) * 3));
-        const newNet = Math.min(100, Math.max(0, prev.network + (Math.random() - 0.5) * 30));
+    let active = true;
 
-        setCpuHistory(h => [...h.slice(1), newCpu]);
-        setMemHistory(h => [...h.slice(1), newMem]);
-        setDiskHistory(h => [...h.slice(1), newDisk]);
-        setNetHistory(h => [...h.slice(1), newNet]);
+    const onVisibilityChange = () => {
+      isVisibleRef.current = document.visibilityState === 'visible';
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    onVisibilityChange();
 
-        return {
-          ...prev,
-          cpu: newCpu,
-          memory: newMem,
-          disk: newDisk,
-          network: newNet
-        };
-      });
-    }, 1000);
+    const fast = async () => {
+      try {
+        if (!isVisibleRef.current) return;
+        await Promise.all([fetchUsage(), fetchNetworkStats()]);
+      } catch {
+        if (!active) return;
+      }
+    };
 
-    return () => clearInterval(interval);
+    const slow = async () => {
+      try {
+        if (!isVisibleRef.current) return;
+        await Promise.all([fetchDiskAndUptime(), fetchProcessStats()]);
+      } catch {
+        if (!active) return;
+      }
+    };
+
+    fetchCpuInfo();
+    fetchNetworkSpeed();
+    fetchNetworkLatency();
+    fast();
+    slow();
+
+    const fastInterval = setInterval(fast, 2000);
+    const slowInterval = setInterval(slow, 10000);
+    const netSpeedInterval = setInterval(fetchNetworkSpeed, 30000);
+    const latencyInterval = setInterval(fetchNetworkLatency, 30000);
+
+    return () => {
+      active = false;
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      clearInterval(fastInterval);
+      clearInterval(slowInterval);
+      clearInterval(netSpeedInterval);
+      clearInterval(latencyInterval);
+    };
   }, []);
-
-  // Mock processes
-  const processes = [
-    { name: 'System', cpu: 2.1, memory: 128, pid: 4 },
-    { name: 'explorer.exe', cpu: 1.5, memory: 89, pid: 4521 },
-    { name: 'chrome.exe', cpu: 12.4, memory: 892, pid: 8234 },
-    { name: 'vscode.exe', cpu: 8.2, memory: 456, pid: 7123 },
-    { name: 'node.exe', cpu: 4.1, memory: 234, pid: 9012 },
-    { name: 'WindowsTerminal.exe', cpu: 0.8, memory: 67, pid: 5678 },
-  ].sort((a, b) => b.cpu - a.cpu);
 
   return (
     <div>
@@ -341,9 +579,9 @@ export default function SystemMonitor({ showToast: _showToast }: SystemMonitorPr
           data={cpuHistory}
           color={currentStats.cpu > 80 ? 'rgb(255, 71, 87)' : currentStats.cpu > 60 ? 'rgb(255, 184, 0)' : 'rgb(0, 240, 255)'}
           details={[
-            { label: t('cores'), value: '8' },
-            { label: t('speed'), value: '3.6 GHz' },
-            { label: t('base'), value: '2.9 GHz' }
+            { label: t('cores'), value: currentStats.cpuCores ? currentStats.cpuCores.toString() : '-' },
+            { label: t('speed'), value: currentStats.cpuSpeedGHz ? `${currentStats.cpuSpeedGHz.toFixed(2)} GHz` : '-' },
+            { label: t('base'), value: currentStats.cpuBaseGHz ? `${currentStats.cpuBaseGHz.toFixed(2)} GHz` : '-' }
           ]}
         />
 
@@ -355,9 +593,9 @@ export default function SystemMonitor({ showToast: _showToast }: SystemMonitorPr
           data={memHistory}
           color={currentStats.memory > 85 ? 'rgb(255, 71, 87)' : 'rgb(0, 240, 255)'}
           details={[
-            { label: t('used'), value: '9.9 GB' },
-            { label: t('available'), value: '6.1 GB' },
-            { label: t('total'), value: '16 GB' }
+            { label: t('used'), value: `${formatGb(currentStats.memUsedGB)} GB` },
+            { label: t('available'), value: `${formatGb(currentStats.memFreeGB)} GB` },
+            { label: t('total'), value: `${formatGb(currentStats.memTotalGB)} GB` }
           ]}
         />
 
@@ -369,9 +607,9 @@ export default function SystemMonitor({ showToast: _showToast }: SystemMonitorPr
           data={diskHistory}
           color="rgb(0, 240, 255)"
           details={[
-            { label: t('read'), value: '12.4 MB/s' },
-            { label: t('write'), value: '8.2 MB/s' },
-            { label: t('active'), value: `${currentStats.disk}%` }
+            { label: t('used'), value: `${formatGb(currentStats.diskUsedGB)} GB` },
+            { label: t('available'), value: `${formatGb(currentStats.diskFreeGB)} GB` },
+            { label: t('total'), value: `${formatGb(currentStats.diskTotalGB)} GB` }
           ]}
         />
 
@@ -383,9 +621,9 @@ export default function SystemMonitor({ showToast: _showToast }: SystemMonitorPr
           data={netHistory}
           color="rgb(0, 255, 148)"
           details={[
-            { label: t('download'), value: '12.8 MB/s' },
-            { label: t('upload'), value: '2.4 MB/s' },
-            { label: t('latency'), value: '24 ms' }
+            { label: t('download'), value: `${currentStats.netDownMB.toFixed(2)} MB/s` },
+            { label: t('upload'), value: `${currentStats.netUpMB.toFixed(2)} MB/s` },
+            { label: t('latency'), value: currentStats.netLatencyMs != null ? `${currentStats.netLatencyMs} ms` : '-' }
           ]}
         />
       </div>
@@ -394,7 +632,7 @@ export default function SystemMonitor({ showToast: _showToast }: SystemMonitorPr
       <div className="list-container">
         <div className="list-header">
           <span className="list-title">{t('top_processes_cpu')}</span>
-          <span className="list-count">{processes.length} {t('processes')}</span>
+          <span className="list-count">{currentStats.processes} {t('processes')}</span>
         </div>
         {processes.map((proc, i) => (
           <ProcessItem key={i} {...proc} />

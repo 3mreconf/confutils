@@ -4,6 +4,7 @@ mod anti_debug;
 mod commands;
 mod hwid;
 mod security;
+mod taskbar;
 
 use obfstr::obfstr;
 use tauri::menu::{Menu, MenuItem};
@@ -14,11 +15,10 @@ fn main() {
     if anti_debug::is_being_debugged() {
         std::process::exit(0);
     }
+    taskbar::handle_cli_apply();
 
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
-        .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             if let Some(window) = app.get_webview_window(obfstr!("main")) {
                 let _ = window.show();
@@ -246,6 +246,8 @@ fn main() {
             commands::secure_delete_file,
             commands::set_discord_rpc,
             commands::clear_discord_rpc,
+            commands::set_taskbar_appearance,
+            commands::install_translucenttb,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
