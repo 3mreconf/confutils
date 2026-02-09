@@ -80,13 +80,31 @@ Write-Host "`n[4/5] Committing changes..." -ForegroundColor Yellow
 git add .
 git commit -m "chore: bump version to $NewVersion and sync all configs"
 
-Write-Host "`n[5/5] Creating tag $TagVersion..." -ForegroundColor Yellow
+# 6. Sync with remote before tagging (avoid non-fast-forward)
+Write-Host "`n[5/5] Syncing with remote..." -ForegroundColor Yellow
+git pull --rebase origin main
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "[ERROR] Rebase failed. Resolve conflicts and rerun publish.ps1." -ForegroundColor Red
+    exit 1
+}
+
+Write-Host "Creating tag $TagVersion..." -ForegroundColor Yellow
 git tag -a $TagVersion -m "Release $TagVersion"
 
-# 6. Pushing to GitHub
+# 7. Pushing to GitHub (retry on transient failures)
 Write-Host "`n>>> Pushing to GitHub..." -ForegroundColor Yellow
-git push origin main
-git push origin $TagVersion
+$maxRetries = 3
+for ($i = 1; $i -le $maxRetries; $i++) {
+    git push origin main --tags
+    if ($LASTEXITCODE -eq 0) { break }
+    if ($i -lt $maxRetries) {
+        Write-Host "Push failed (attempt $i/$maxRetries). Retrying in 3 seconds..." -ForegroundColor Yellow
+        Start-Sleep -Seconds 3
+    } else {
+        Write-Host "[ERROR] Push failed after $maxRetries attempts." -ForegroundColor Red
+        exit 1
+    }
+}
 
 Write-Host "`nSUCCESS: Release created! GitHub Actions will build and publish the release." -ForegroundColor Green
 Write-Host "Release URL: https://github.com/3mreconf/confutils/releases/tag/$TagVersion" -ForegroundColor Cyan
