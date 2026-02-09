@@ -17,9 +17,11 @@ import {
 } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
 import { useI18n } from '../../i18n/I18nContext';
+import { servicesCatalog } from '../data/services_catalog';
 
 interface ServicesProps {
   showToast: (type: 'success' | 'warning' | 'error' | 'info', title: string, message?: string) => void;
+  externalQuery?: string;
 }
 
 interface Service {
@@ -33,128 +35,17 @@ interface Service {
   canDisable: boolean;
 }
 
-const buildServices = (t: (key: any) => string): Service[] => ([
-  {
-    id: 'wuauserv',
-    name: 'wuauserv',
-    displayName: t('service_windows_update'),
-    description: t('service_windows_update_desc'),
-    status: 'running',
-    startupType: 'automatic',
-    category: 'system',
-    canDisable: true
-  },
-  {
-    id: 'bits',
-    name: 'BITS',
-    displayName: t('service_bits'),
-    description: t('service_bits_desc'),
-    status: 'running',
-    startupType: 'automatic',
-    category: 'network',
-    canDisable: true
-  },
-  {
-    id: 'wdefend',
-    name: 'WinDefend',
-    displayName: t('service_defender'),
-    description: t('service_defender_desc'),
-    status: 'running',
-    startupType: 'automatic',
-    category: 'security',
-    canDisable: false
-  },
-  {
-    id: 'spooler',
-    name: 'Spooler',
-    displayName: t('service_spooler'),
-    description: t('service_spooler_desc'),
-    status: 'running',
-    startupType: 'automatic',
-    category: 'application',
-    canDisable: true
-  },
-  {
-    id: 'wsearch',
-    name: 'WSearch',
-    displayName: t('service_windows_search'),
-    description: t('service_windows_search_desc'),
-    status: 'running',
-    startupType: 'automatic',
-    category: 'system',
-    canDisable: true
-  },
-  {
-    id: 'diagtrack',
-    name: 'DiagTrack',
-    displayName: t('service_diagtrack'),
-    description: t('service_diagtrack_desc'),
-    status: 'running',
-    startupType: 'automatic',
-    category: 'system',
-    canDisable: true
-  },
-  {
-    id: 'sysmain',
-    name: 'SysMain',
-    displayName: t('service_sysmain'),
-    description: t('service_sysmain_desc'),
-    status: 'stopped',
-    startupType: 'disabled',
-    category: 'system',
-    canDisable: true
-  },
-  {
-    id: 'fax',
-    name: 'Fax',
-    displayName: t('service_fax'),
-    description: t('service_fax_desc'),
-    status: 'stopped',
-    startupType: 'manual',
-    category: 'application',
-    canDisable: true
-  },
-  {
-    id: 'remoteregistry',
-    name: 'RemoteRegistry',
-    displayName: t('service_remote_registry'),
-    description: t('service_remote_registry_desc'),
-    status: 'stopped',
-    startupType: 'disabled',
-    category: 'security',
-    canDisable: true
-  },
-  {
-    id: 'dhcp',
-    name: 'Dhcp',
-    displayName: t('service_dhcp'),
-    description: t('service_dhcp_desc'),
-    status: 'running',
-    startupType: 'automatic',
-    category: 'network',
-    canDisable: false
-  },
-  {
-    id: 'dnscache',
-    name: 'Dnscache',
-    displayName: t('service_dns_client'),
-    description: t('service_dns_client_desc'),
-    status: 'running',
-    startupType: 'automatic',
-    category: 'network',
-    canDisable: false
-  },
-  {
-    id: 'themes',
-    name: 'Themes',
-    displayName: t('service_themes'),
-    description: t('service_themes_desc'),
-    status: 'running',
-    startupType: 'automatic',
-    category: 'application',
-    canDisable: true
-  },
-]);
+const buildServices = (t: (key: any) => string): Service[] =>
+  servicesCatalog.map((service) => ({
+    id: service.id,
+    name: service.name,
+    displayName: t(service.displayNameKey as any),
+    description: t(service.descriptionKey as any),
+    status: service.status,
+    startupType: service.startupType,
+    category: service.category,
+    canDisable: service.canDisable
+  }));
 
 const categoryIcons: Record<string, any> = {
   system: Monitor,
@@ -318,12 +209,13 @@ const ServiceRow = ({
   );
 };
 
-export default function Services({ showToast }: ServicesProps) {
+export default function Services({ showToast, externalQuery }: ServicesProps) {
   const { t } = useI18n();
   const [services, setServices] = useState(buildServices(t));
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'running' | 'stopped'>('all');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   useEffect(() => {
     setServices((prev) => {
@@ -339,6 +231,51 @@ export default function Services({ showToast }: ServicesProps) {
       });
     });
   }, [t]);
+
+  useEffect(() => {
+    if (typeof externalQuery === 'string') {
+      setSearchQuery(externalQuery);
+    }
+  }, [externalQuery]);
+
+  const loadServiceStates = async () => {
+    setIsRefreshing(true);
+    try {
+      const result = await invoke('run_powershell', {
+        command: `
+          $services = Get-CimInstance Win32_Service | Select-Object Name, State, StartMode
+          $services | ConvertTo-Json -Compress
+        `
+      }) as string;
+
+      const parsed = result && result.trim() ? JSON.parse(result) : [];
+      const list = Array.isArray(parsed) ? parsed : [parsed];
+      const map = new Map<string, { State: string; StartMode: string }>();
+      list.forEach((svc: { Name: string; State: string; StartMode: string }) => {
+        map.set(svc.Name, { State: svc.State, StartMode: svc.StartMode });
+      });
+
+      setServices(prev => prev.map((svc) => {
+        const match = map.get(svc.name);
+        if (!match) return svc;
+        const status = match.State?.toLowerCase() === 'running' ? 'running'
+          : match.State?.toLowerCase() === 'paused' ? 'paused'
+            : 'stopped';
+        const startupType = match.StartMode?.toLowerCase() === 'auto' ? 'automatic'
+          : match.StartMode?.toLowerCase() === 'manual' ? 'manual'
+            : 'disabled';
+        return { ...svc, status, startupType };
+      }));
+    } catch (error) {
+      showToast('error', t('service_error'), String(error));
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
+  useEffect(() => {
+    loadServiceStates();
+  }, []);
 
   const filteredServices = useMemo(() => {
     return services.filter(service => {
@@ -365,10 +302,11 @@ export default function Services({ showToast }: ServicesProps) {
     setProcessing(prev => ({ ...prev, [id]: true }));
     try {
       await invoke('run_powershell', { command: `Start-Service -Name "${service.name}" -ErrorAction Stop` });
-      setServices(prev => prev.map(s => s.id === id ? { ...s, status: 'running' as const } : s));
+      await loadServiceStates();
       showToast('success', t('service_started'), `${service.displayName} ${t('service_now_running')}`);
     } catch (error) {
-      showToast('error', t('service_error'), String(error));
+      const msg = String(error);
+      showToast('error', t('service_error'), msg.includes('Access is denied') ? t('tweak_admin_required') : msg);
     } finally {
       setProcessing(prev => ({ ...prev, [id]: false }));
     }
@@ -381,10 +319,11 @@ export default function Services({ showToast }: ServicesProps) {
     setProcessing(prev => ({ ...prev, [id]: true }));
     try {
       await invoke('run_powershell', { command: `Stop-Service -Name "${service.name}" -Force -ErrorAction Stop` });
-      setServices(prev => prev.map(s => s.id === id ? { ...s, status: 'stopped' as const } : s));
+      await loadServiceStates();
       showToast('info', t('service_stopped'), `${service.displayName} ${t('service_has_been_stopped')}`);
     } catch (error) {
-      showToast('error', t('service_error'), String(error));
+      const msg = String(error);
+      showToast('error', t('service_error'), msg.includes('Access is denied') ? t('tweak_admin_required') : msg);
     } finally {
       setProcessing(prev => ({ ...prev, [id]: false }));
     }
@@ -398,10 +337,11 @@ export default function Services({ showToast }: ServicesProps) {
     showToast('info', t('service_restarting'), `${service.displayName} ${t('service_is_restarting')}`);
     try {
       await invoke('run_powershell', { command: `Restart-Service -Name "${service.name}" -Force -ErrorAction Stop` });
-      setServices(prev => prev.map(s => s.id === id ? { ...s, status: 'running' as const } : s));
+      await loadServiceStates();
       showToast('success', t('service_restarted'), `${service.displayName} ${t('service_has_been_restarted')}`);
     } catch (error) {
-      showToast('error', t('service_error'), String(error));
+      const msg = String(error);
+      showToast('error', t('service_error'), msg.includes('Access is denied') ? t('tweak_admin_required') : msg);
     } finally {
       setProcessing(prev => ({ ...prev, [id]: false }));
     }
@@ -415,10 +355,11 @@ export default function Services({ showToast }: ServicesProps) {
     try {
       const startupMap = { automatic: 'Automatic', manual: 'Manual', disabled: 'Disabled' };
       await invoke('run_powershell', { command: `Set-Service -Name "${service.name}" -StartupType ${startupMap[type]} -ErrorAction Stop` });
-      setServices(prev => prev.map(s => s.id === id ? { ...s, startupType: type } : s));
+      await loadServiceStates();
       showToast('success', t('startup_changed'), `${service.displayName} ${t('startup_set_to')} ${type}`);
     } catch (error) {
-      showToast('error', t('service_error'), String(error));
+      const msg = String(error);
+      showToast('error', t('service_error'), msg.includes('Access is denied') ? t('tweak_admin_required') : msg);
     } finally {
       setProcessing(prev => ({ ...prev, [id]: false }));
     }
@@ -436,6 +377,10 @@ export default function Services({ showToast }: ServicesProps) {
             {t('services_subtitle')}
           </p>
         </div>
+        <button className="btn btn-secondary" onClick={loadServiceStates} disabled={isRefreshing}>
+          <RefreshCw size={16} className={isRefreshing ? 'spin' : ''} />
+          {isRefreshing ? t('scanning') : t('refresh')}
+        </button>
       </div>
 
       {/* Stats */}

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import {
   Wifi,
@@ -12,6 +12,7 @@ import {
   Server
 } from 'lucide-react';
 import { useI18n } from '../../i18n/I18nContext';
+import { SelectMenu } from '../components/SelectMenu';
 
 interface NetworkProps {
   showToast: (type: 'success' | 'warning' | 'error' | 'info', title: string, message?: string) => void;
@@ -57,6 +58,24 @@ export default function Network({ showToast }: NetworkProps) {
   const { t } = useI18n();
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [processing, setProcessing] = useState<Record<string, boolean>>({});
+  const dnsPresets = useMemo(() => ([
+    { id: 'cloudflare', name: 'Cloudflare', v4: ['1.1.1.1', '1.0.0.1'], v6: ['2606:4700:4700::1111', '2606:4700:4700::1001'] },
+    { id: 'google', name: 'Google', v4: ['8.8.8.8', '8.8.4.4'], v6: ['2001:4860:4860::8888', '2001:4860:4860::8844'] },
+    { id: 'quad9', name: 'Quad9', v4: ['9.9.9.9', '149.112.112.112'], v6: ['2620:fe::fe', '2620:fe::9'] },
+    { id: 'adguard', name: 'AdGuard', v4: ['94.140.14.14', '94.140.15.15'], v6: ['2a10:50c0::ad1:ff', '2a10:50c0::ad2:ff'] }
+  ]), []);
+  const [selectedPresetId, setSelectedPresetId] = useState(dnsPresets[0]?.id || 'cloudflare');
+  const selectedPreset = dnsPresets.find((p) => p.id === selectedPresetId) || dnsPresets[0];
+
+  const runPowershell = async (command: string, requireAdmin = false) => {
+    const wrapped = requireAdmin ? `
+      $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+      if (-not $isAdmin) { throw "ADMIN_REQUIRED" }
+      ${command}
+    ` : command;
+
+    return await invoke('run_powershell', { command: wrapped });
+  };
 
   const handleRefresh = () => {
     setIsRefreshing(true);
@@ -70,19 +89,60 @@ export default function Network({ showToast }: NetworkProps) {
     setProcessing(prev => ({ ...prev, dns: true }));
     showToast('info', t('network_dns_flush'), t('network_dns_msg'));
     try {
-      await invoke('run_powershell', {
-        command: `
-          $ErrorActionPreference = 'SilentlyContinue'
-          Clear-DnsClientCache
-          ipconfig /flushdns | Out-Null
-          "DNS cache cleared"
-        `
-      });
+      await runPowershell(`
+        $ErrorActionPreference = 'SilentlyContinue'
+        Clear-DnsClientCache
+        ipconfig /flushdns | Out-Null
+        "DNS cache cleared"
+      `);
       showToast('success', t('network_dns_flush'), t('network_dns_success'));
     } catch (error) {
-      showToast('error', t('network_error'), String(error));
+      const msg = String(error);
+      showToast('error', t('network_error'), msg.includes('ADMIN_REQUIRED') ? t('tweak_admin_required') : msg);
     } finally {
       setProcessing(prev => ({ ...prev, dns: false }));
+    }
+  };
+
+  const handleApplyDnsPreset = async () => {
+    if (!selectedPreset) return;
+    setProcessing(prev => ({ ...prev, dnsPreset: true }));
+    showToast('info', t('network_dns_flush'), `${selectedPreset.name} DNS`);
+    try {
+      await runPowershell(`
+        $adapters = Get-NetAdapter | Where-Object { $_.Status -eq "Up" }
+        foreach ($a in $adapters) {
+          Set-DnsClientServerAddress -InterfaceAlias $a.Name -ServerAddresses @("${selectedPreset.v4[0]}", "${selectedPreset.v4[1]}") -AddressFamily IPv4
+          Set-DnsClientServerAddress -InterfaceAlias $a.Name -ServerAddresses @("${selectedPreset.v6[0]}", "${selectedPreset.v6[1]}") -AddressFamily IPv6
+        }
+        "DNS updated"
+      `, true);
+      showToast('success', t('network_dns_flush'), `${selectedPreset.name} DNS`);
+    } catch (error) {
+      const msg = String(error);
+      showToast('error', t('network_error'), msg.includes('ADMIN_REQUIRED') ? t('tweak_admin_required') : msg);
+    } finally {
+      setProcessing(prev => ({ ...prev, dnsPreset: false }));
+    }
+  };
+
+  const handleResetDnsPreset = async () => {
+    setProcessing(prev => ({ ...prev, dnsReset: true }));
+    showToast('info', t('network_dns_flush'), t('toolkit_dns_reset_desc' as any));
+    try {
+      await runPowershell(`
+        $adapters = Get-NetAdapter | Where-Object { $_.Status -eq "Up" }
+        foreach ($a in $adapters) {
+          Set-DnsClientServerAddress -InterfaceAlias $a.Name -ResetServerAddresses
+        }
+        "DNS reset"
+      `, true);
+      showToast('success', t('network_dns_flush'), t('toolkit_dns_reset_title' as any));
+    } catch (error) {
+      const msg = String(error);
+      showToast('error', t('network_error'), msg.includes('ADMIN_REQUIRED') ? t('tweak_admin_required') : msg);
+    } finally {
+      setProcessing(prev => ({ ...prev, dnsReset: false }));
     }
   };
 
@@ -90,21 +150,20 @@ export default function Network({ showToast }: NetworkProps) {
     setProcessing(prev => ({ ...prev, adapter: true }));
     showToast('info', t('network_adapter_reset'), t('network_adapter_msg'));
     try {
-      await invoke('run_powershell', {
-        command: `
-          $ErrorActionPreference = 'SilentlyContinue'
-          $adapters = Get-NetAdapter | Where-Object {$_.Status -eq 'Up'}
-          foreach ($adapter in $adapters) {
-            Disable-NetAdapter -Name $adapter.Name -Confirm:$false -ErrorAction SilentlyContinue
-            Start-Sleep -Milliseconds 500
-            Enable-NetAdapter -Name $adapter.Name -Confirm:$false -ErrorAction SilentlyContinue
-          }
-          "Adapters reset"
-        `
-      });
+      await runPowershell(`
+        $ErrorActionPreference = 'SilentlyContinue'
+        $adapters = Get-NetAdapter | Where-Object {$_.Status -eq 'Up'}
+        foreach ($adapter in $adapters) {
+          Disable-NetAdapter -Name $adapter.Name -Confirm:$false -ErrorAction SilentlyContinue
+          Start-Sleep -Milliseconds 500
+          Enable-NetAdapter -Name $adapter.Name -Confirm:$false -ErrorAction SilentlyContinue
+        }
+        "Adapters reset"
+      `, true);
       showToast('success', t('network_adapter_reset'), t('network_adapter_success'));
     } catch (error) {
-      showToast('error', t('network_error'), String(error));
+      const msg = String(error);
+      showToast('error', t('network_error'), msg.includes('ADMIN_REQUIRED') ? t('tweak_admin_required') : msg);
     } finally {
       setProcessing(prev => ({ ...prev, adapter: false }));
     }
@@ -114,30 +173,29 @@ export default function Network({ showToast }: NetworkProps) {
     setProcessing(prev => ({ ...prev, qos: true }));
     showToast('info', t('network_qos'), t('network_qos_msg'));
     try {
-      await invoke('run_powershell', {
-        command: `
-          # Disable Nagle's Algorithm for lower latency
-          $interfacesPath = 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters\\Interfaces'
-          Get-ChildItem $interfacesPath | ForEach-Object {
-            Set-ItemProperty -Path $_.PSPath -Name 'TcpAckFrequency' -Value 1 -Type DWord -Force
-            Set-ItemProperty -Path $_.PSPath -Name 'TCPNoDelay' -Value 1 -Type DWord -Force
-          }
+      await runPowershell(`
+        # Disable Nagle's Algorithm for lower latency
+        $interfacesPath = 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters\\Interfaces'
+        Get-ChildItem $interfacesPath | ForEach-Object {
+          Set-ItemProperty -Path $_.PSPath -Name 'TcpAckFrequency' -Value 1 -Type DWord -Force
+          Set-ItemProperty -Path $_.PSPath -Name 'TCPNoDelay' -Value 1 -Type DWord -Force
+        }
 
-          # Network throttling settings
-          $profilePath = 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile'
-          Set-ItemProperty -Path $profilePath -Name 'NetworkThrottlingIndex' -Value 0xffffffff -Type DWord -Force
-          Set-ItemProperty -Path $profilePath -Name 'SystemResponsiveness' -Value 0 -Type DWord -Force
+        # Network throttling settings
+        $profilePath = 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile'
+        Set-ItemProperty -Path $profilePath -Name 'NetworkThrottlingIndex' -Value 0xffffffff -Type DWord -Force
+        Set-ItemProperty -Path $profilePath -Name 'SystemResponsiveness' -Value 0 -Type DWord -Force
 
-          # TCP optimizations
-          netsh int tcp set global autotuninglevel=normal
-          netsh int tcp set global congestionprovider=ctcp
+        # TCP optimizations
+        netsh int tcp set global autotuninglevel=normal
+        netsh int tcp set global congestionprovider=ctcp
 
-          "QoS settings applied"
-        `
-      });
+        "QoS settings applied"
+      `, true);
       showToast('success', t('network_qos'), t('network_qos_success'));
     } catch (error) {
-      showToast('error', t('network_error'), String(error));
+      const msg = String(error);
+      showToast('error', t('network_error'), msg.includes('ADMIN_REQUIRED') ? t('tweak_admin_required') : msg);
     } finally {
       setProcessing(prev => ({ ...prev, qos: false }));
     }
@@ -147,23 +205,21 @@ export default function Network({ showToast }: NetworkProps) {
     setProcessing(prev => ({ ...prev, trace: true }));
     showToast('info', t('network_gateway'), t('network_gateway_msg'));
     try {
-      const result = await invoke('run_powershell', {
-        command: `
-          $ErrorActionPreference = 'SilentlyContinue'
-          $gateway = (Get-NetRoute -DestinationPrefix '0.0.0.0/0' | Select-Object -First 1).NextHop
-          if ($gateway) {
-            $ping = Test-Connection -ComputerName $gateway -Count 2 -ErrorAction SilentlyContinue
-            if ($ping) {
-              $avg = ($ping | Measure-Object -Property ResponseTime -Average).Average
-              "Gateway: $gateway - Avg: $([math]::Round($avg, 2))ms"
-            } else {
-              "Gateway: $gateway - No response"
-            }
+      const result = await runPowershell(`
+        $ErrorActionPreference = 'SilentlyContinue'
+        $gateway = (Get-NetRoute -DestinationPrefix '0.0.0.0/0' | Select-Object -First 1).NextHop
+        if ($gateway) {
+          $ping = Test-Connection -ComputerName $gateway -Count 2 -ErrorAction SilentlyContinue
+          if ($ping) {
+            $avg = ($ping | Measure-Object -Property ResponseTime -Average).Average
+            "Gateway: $gateway - Avg: $([math]::Round($avg, 2))ms"
           } else {
-            "No gateway found"
+            "Gateway: $gateway - No response"
           }
-        `
-      }) as string;
+        } else {
+          "No gateway found"
+        }
+      `) as string;
       showToast('success', t('network_gateway'), result || t('network_trace_success'));
     } catch (error) {
       showToast('error', t('network_error'), String(error));
@@ -195,6 +251,52 @@ export default function Network({ showToast }: NetworkProps) {
       </div>
 
       <div className="card-grid mt-lg">
+        <div className="control-card">
+          <div className="card-header">
+            <div className="card-icon-wrapper">
+              <Server size={20} />
+            </div>
+            <div className="card-status">
+              <span className="card-status-dot" />
+              {t('network_dns_flush')}
+            </div>
+          </div>
+          <div className="card-title">{t('toolkit_dns_title' as any)}</div>
+          <div className="card-description">{t('toolkit_dns_desc' as any)}</div>
+          <div className="flex items-center gap-md mt-md" style={{ flexWrap: 'wrap' }}>
+            <SelectMenu
+              value={selectedPresetId}
+              options={dnsPresets.map((preset) => ({
+                value: preset.id,
+                label: preset.name
+              }))}
+              onChange={(next) => setSelectedPresetId(next)}
+            />
+            <button
+              className="btn btn-primary"
+              onClick={handleApplyDnsPreset}
+              disabled={!!processing.dnsPreset}
+            >
+              {processing.dnsPreset ? <RefreshCw size={14} className="spin" /> : null}
+              {t('action_apply' as any)}
+            </button>
+            <button
+              className="btn btn-ghost"
+              onClick={handleResetDnsPreset}
+              disabled={!!processing.dnsReset}
+            >
+              {processing.dnsReset ? <RefreshCw size={14} className="spin" /> : null}
+              {t('action_reset' as any)}
+            </button>
+          </div>
+          {selectedPreset ? (
+            <div className="text-muted mt-sm" style={{ fontSize: 'var(--text-sm)' }}>
+              IPv4: {selectedPreset.v4.join(', ')}<br />
+              IPv6: {selectedPreset.v6.join(', ')}
+            </div>
+          ) : null}
+        </div>
+
         <div className="control-card">
           <div className="card-header">
             <div className="card-icon-wrapper">

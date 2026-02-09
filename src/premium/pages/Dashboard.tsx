@@ -1,11 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import {
   Cpu,
   HardDrive,
   MemoryStick,
   Thermometer,
-  Zap,
   Shield,
   Wifi,
   Trash2,
@@ -25,36 +24,14 @@ interface DashboardProps {
   onNavigate: (page: string) => void;
 }
 
-// Mock system data
-const useSystemStats = () => {
-  const [stats, setStats] = useState({
-    cpu: 34,
-    memory: 62,
-    disk: 48,
-    temp: 52,
-    network: { up: 2.4, down: 12.8 },
-    processes: 142,
-    services: { running: 87, stopped: 23 },
-  });
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setStats(prev => ({
-        ...prev,
-        cpu: Math.min(100, Math.max(10, prev.cpu + (Math.random() - 0.5) * 15)),
-        memory: Math.min(95, Math.max(30, prev.memory + (Math.random() - 0.5) * 5)),
-        temp: Math.min(85, Math.max(35, prev.temp + (Math.random() - 0.5) * 8)),
-        network: {
-          up: Math.max(0.1, prev.network.up + (Math.random() - 0.5) * 2),
-          down: Math.max(0.1, prev.network.down + (Math.random() - 0.5) * 5),
-        }
-      }));
-    }, 2000);
-
-    return () => clearInterval(interval);
-  }, []);
-
-  return stats;
+const STATIC_STATS = {
+  cpu: 34,
+  memory: 62,
+  disk: 48,
+  temp: 52,
+  network: { up: 2.4, down: 12.8 },
+  processes: 142,
+  services: { running: 87, stopped: 23 },
 };
 
 // Progress Ring Component
@@ -195,7 +172,7 @@ const StatCard = ({
 
 export default function Dashboard({ showToast, onNavigate }: DashboardProps) {
   const { t } = useI18n();
-  const stats = useSystemStats();
+  const stats = STATIC_STATS;
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   const handleRefresh = () => {
@@ -259,46 +236,6 @@ export default function Dashboard({ showToast, onNavigate }: DashboardProps) {
     }
   };
 
-  const handleOptimize = async () => {
-    setQuickActionProcessing(prev => ({ ...prev, optimize: true }));
-    showToast('info', t('action_optimize'), t('toast_running_optimization'));
-    try {
-      await invoke('run_powershell', {
-        command: `
-          # Clear standby memory
-          [System.GC]::Collect()
-          [System.GC]::WaitForPendingFinalizers()
-          [System.GC]::Collect()
-
-          # Optimize drives (SSD TRIM / HDD Defrag)
-          $drives = Get-Volume | Where-Object { $_.DriveLetter -and $_.DriveType -eq 'Fixed' }
-          foreach ($drive in $drives) {
-            Optimize-Volume -DriveLetter $drive.DriveLetter -ErrorAction SilentlyContinue
-          }
-
-          # Clear DNS cache
-          Clear-DnsClientCache
-          ipconfig /flushdns | Out-Null
-
-          # Flush file system buffers
-          Write-VolumeCache -DriveLetter C -ErrorAction SilentlyContinue
-
-          # Optimize CPU priority for foreground apps
-          Set-ItemProperty -Path "HKLM:\\SYSTEM\\CurrentControlSet\\Control\\PriorityControl" -Name "Win32PrioritySeparation" -Value 38 -Type DWord -Force -ErrorAction SilentlyContinue
-
-          # Disable NTFS last access timestamp
-          fsutil behavior set disablelastaccess 1 | Out-Null
-
-          "Optimization complete"
-        `
-      });
-      showToast('success', t('action_optimize'), t('toast_performance_improved'));
-    } catch (error) {
-      showToast('error', t('action_optimize'), String(error));
-    } finally {
-      setQuickActionProcessing(prev => ({ ...prev, optimize: false }));
-    }
-  };
 
   const handleDefenderCheck = async () => {
     setQuickActionProcessing(prev => ({ ...prev, security: true }));
@@ -498,17 +435,6 @@ export default function Dashboard({ showToast, onNavigate }: DashboardProps) {
         />
 
         <QuickActionCard
-          icon={Zap}
-          title={t('action_optimize')}
-          description={t('action_optimize_desc')}
-          onAction={handleOptimize}
-          variant="amber"
-          actionLabel={t('action_run')}
-          lastRunLabel={t('last_run')}
-          disabled={quickActionProcessing.optimize}
-        />
-
-        <QuickActionCard
           icon={Shield}
           title={t('action_security')}
           description={t('action_security_desc')}
@@ -558,7 +484,7 @@ export default function Dashboard({ showToast, onNavigate }: DashboardProps) {
             <div className="list-item-title">{t('startup_programs')}</div>
             <div className="list-item-subtitle">{t('startup_programs_desc')}</div>
           </div>
-          <button className="btn btn-ghost" onClick={() => onNavigate('optimization')}>
+          <button className="btn btn-ghost" onClick={() => onNavigate('services')}>
             {t('manage')}
             <ChevronRight size={14} />
           </button>

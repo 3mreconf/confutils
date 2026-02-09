@@ -20,9 +20,6 @@ export default defineConfig({
             if (id.includes('@tauri-apps')) {
               return 'vendor-tauri';
             }
-            if (id.includes('crypto-js')) {
-              return 'vendor-crypto';
-            }
             return 'vendor';
           }
           return undefined;

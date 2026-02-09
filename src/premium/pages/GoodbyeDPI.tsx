@@ -24,12 +24,24 @@ interface DPIMode {
   id: string;
   nameKey: string;
   descKey: string;
-  command: string;
+  command?: string;
+  script?: string;
+  serviceScript?: string;
   icon: any;
   recommended?: boolean;
 }
 
-const DPI_MODES: DPIMode[] = [
+interface DPIVariant {
+  id: string;
+  nameKey: string;
+  descKey: string;
+  url: string;
+  installPath: string;
+  repoUrl: string;
+  modes: DPIMode[];
+}
+
+const ORIGINAL_MODES: DPIMode[] = [
   {
     id: 'mode1',
     nameKey: 'gdpi_mode1_name',
@@ -56,8 +68,86 @@ const DPI_MODES: DPIMode[] = [
   }
 ];
 
-const GOODBYEDPI_URL = 'https://github.com/ValdikSS/GoodbyeDPI/releases/download/0.2.2/goodbyedpi-0.2.2.zip';
-const INSTALL_PATH = 'C:\\ProgramData\\ConfUtils\\GoodbyeDPI';
+const TURKEY_MODES: DPIMode[] = [
+  {
+    id: 'tr_default',
+    nameKey: 'gdpi_tr_mode_default_name',
+    descKey: 'gdpi_tr_mode_default_desc',
+    script: 'turkey_dnsredir.cmd',
+    serviceScript: 'service_install_dnsredir_turkey.cmd',
+    icon: CheckCircle,
+    recommended: true
+  },
+  {
+    id: 'tr_alt1',
+    nameKey: 'gdpi_tr_mode_alt1_name',
+    descKey: 'gdpi_tr_mode_alt1_desc',
+    script: 'turkey_dnsredir_alternative_superonline.cmd',
+    serviceScript: 'service_install_dnsredir_turkey_alternative_superonline.cmd',
+    icon: Zap
+  },
+  {
+    id: 'tr_alt2',
+    nameKey: 'gdpi_tr_mode_alt2_name',
+    descKey: 'gdpi_tr_mode_alt2_desc',
+    script: 'turkey_dnsredir_alternative2_superonline.cmd',
+    serviceScript: 'service_install_dnsredir_turkey_alternative2_superonline.cmd',
+    icon: Shield
+  },
+  {
+    id: 'tr_alt3',
+    nameKey: 'gdpi_tr_mode_alt3_name',
+    descKey: 'gdpi_tr_mode_alt3_desc',
+    script: 'turkey_dnsredir_alternative3_superonline.cmd',
+    serviceScript: 'service_install_dnsredir_turkey_alternative3_superonline.cmd',
+    icon: Zap
+  },
+  {
+    id: 'tr_alt4',
+    nameKey: 'gdpi_tr_mode_alt4_name',
+    descKey: 'gdpi_tr_mode_alt4_desc',
+    script: 'turkey_dnsredir_alternative4_superonline.cmd',
+    serviceScript: 'service_install_dnsredir_turkey_alternative4_superonline.cmd',
+    icon: Shield
+  },
+  {
+    id: 'tr_alt5',
+    nameKey: 'gdpi_tr_mode_alt5_name',
+    descKey: 'gdpi_tr_mode_alt5_desc',
+    script: 'turkey_dnsredir_alternative5_superonline.cmd',
+    serviceScript: 'service_install_dnsredir_turkey_alternative5_superonline.cmd',
+    icon: Zap
+  },
+  {
+    id: 'tr_alt6',
+    nameKey: 'gdpi_tr_mode_alt6_name',
+    descKey: 'gdpi_tr_mode_alt6_desc',
+    script: 'turkey_dnsredir_alternative6_superonline.cmd',
+    serviceScript: 'service_install_dnsredir_turkey_alternative6_superonline.cmd',
+    icon: Shield
+  }
+];
+
+const GOODBYEDPI_VARIANTS: DPIVariant[] = [
+  {
+    id: 'original',
+    nameKey: 'gdpi_variant_original',
+    descKey: 'gdpi_variant_original_desc',
+    url: 'https://github.com/ValdikSS/GoodbyeDPI/releases/download/0.2.2/goodbyedpi-0.2.2.zip',
+    installPath: 'C:\\ProgramData\\ConfUtils\\GoodbyeDPI',
+    repoUrl: 'https://github.com/ValdikSS/GoodbyeDPI',
+    modes: ORIGINAL_MODES
+  },
+  {
+    id: 'turkey',
+    nameKey: 'gdpi_variant_turkey',
+    descKey: 'gdpi_variant_turkey_desc',
+    url: 'https://github.com/cagritaskn/GoodbyeDPI-Turkey/releases/download/release-0.2.3rc3-turkey/goodbyedpi-0.2.3rc3-turkey.zip',
+    installPath: 'C:\\ProgramData\\ConfUtils\\GoodbyeDPI-Turkey',
+    repoUrl: 'https://github.com/cagritaskn/GoodbyeDPI-Turkey',
+    modes: TURKEY_MODES
+  }
+];
 
 export default function GoodbyeDPI({ showToast }: GoodbyeDPIProps) {
   const { t } = useI18n();
@@ -65,21 +155,31 @@ export default function GoodbyeDPI({ showToast }: GoodbyeDPIProps) {
   const [isRunning, setIsRunning] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isDownloading, setIsDownloading] = useState(false);
+  const [selectedVariant, setSelectedVariant] = useState('original');
   const [selectedMode, setSelectedMode] = useState('mode1');
   const [isServiceInstalled, setIsServiceInstalled] = useState(false);
+
+  const currentVariant = GOODBYEDPI_VARIANTS.find((variant) => variant.id === selectedVariant) ?? GOODBYEDPI_VARIANTS[0];
+  const activeModes = currentVariant.modes;
 
   // Check installation status on mount
   useEffect(() => {
     checkStatus();
   }, []);
 
+  useEffect(() => {
+    setSelectedMode(currentVariant.modes[0]?.id ?? 'mode1');
+    checkStatus();
+  }, [selectedVariant]);
+
   const checkStatus = async () => {
     setIsLoading(true);
     try {
+      const installPath = currentVariant.installPath;
       // Combined status check to avoid rate limiting
       const result = await invoke('run_powershell', {
         command: `
-          $installed = Test-Path "${INSTALL_PATH}\\goodbyedpi.exe"
+          $installed = Test-Path "${installPath}\\goodbyedpi.exe"
           $service = (Get-Service -Name "GoodbyeDPI" -ErrorAction SilentlyContinue) -ne $null
           $running = (Get-Process -Name "goodbyedpi" -ErrorAction SilentlyContinue) -ne $null
           "$installed|$service|$running"
@@ -102,6 +202,8 @@ export default function GoodbyeDPI({ showToast }: GoodbyeDPIProps) {
     showToast('info', t('gdpi_downloading'), t('gdpi_downloading_desc'));
 
     try {
+      const installPath = currentVariant.installPath;
+      const downloadUrl = currentVariant.url;
       const result = await invoke('run_powershell', {
         command: `
           $ErrorActionPreference = "Stop"
@@ -113,12 +215,12 @@ export default function GoodbyeDPI({ showToast }: GoodbyeDPIProps) {
           Remove-Item $extractPath -Recurse -Force -ErrorAction SilentlyContinue
 
           # Create install directory
-          New-Item -ItemType Directory -Force -Path "${INSTALL_PATH}" | Out-Null
+          New-Item -ItemType Directory -Force -Path "${installPath}" | Out-Null
 
           # Download GoodbyeDPI
           [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
           $ProgressPreference = 'SilentlyContinue'
-          Invoke-WebRequest -Uri "${GOODBYEDPI_URL}" -OutFile $zipPath -UseBasicParsing
+          Invoke-WebRequest -Uri "${downloadUrl}" -OutFile $zipPath -UseBasicParsing
 
           if (!(Test-Path $zipPath)) {
             throw "Download failed - zip file not found"
@@ -127,36 +229,21 @@ export default function GoodbyeDPI({ showToast }: GoodbyeDPIProps) {
           # Extract to temp folder
           Expand-Archive -Path $zipPath -DestinationPath $extractPath -Force
 
-          # Find x86_64 folder (it's inside the main extracted folder)
-          $x64Folder = Get-ChildItem $extractPath -Recurse -Directory | Where-Object { $_.Name -eq "x86_64" } | Select-Object -First 1
+          $exeFile = Get-ChildItem $extractPath -Recurse -Filter "goodbyedpi.exe" | Select-Object -First 1
+          if (!$exeFile) {
+            throw "goodbyedpi.exe not found in extracted archive"
+          }
 
-          if ($x64Folder) {
-            # Copy x86_64 contents
-            Copy-Item -Path "$($x64Folder.FullName)\\*" -Destination "${INSTALL_PATH}" -Recurse -Force
+          $exeFolder = $exeFile.Directory.FullName
+          Copy-Item -Path "$exeFolder\\*" -Destination "${installPath}" -Recurse -Force
 
-            # Also copy blacklist files from parent folder (folder above x86_64)
-            $parentFolder = $x64Folder.Parent.FullName
-            Get-ChildItem $parentFolder -File | Where-Object { $_.Extension -eq ".txt" -or $_.Extension -eq ".cmd" } | Copy-Item -Destination "${INSTALL_PATH}" -Force
-          } else {
-             # Fallback for different structure
-             $extractedRoot = Get-ChildItem $extractPath -Directory | Select-Object -First 1
-             if ($extractedRoot) {
-                # Try to find x86_64 deeper or assume flat structure
-                $deepX64 = Get-ChildItem $extractedRoot.FullName -Recurse -Directory | Where-Object { $_.Name -eq "x86_64" } | Select-Object -First 1
-                if ($deepX64) {
-                     Copy-Item -Path "$($deepX64.FullName)\\*" -Destination "${INSTALL_PATH}" -Recurse -Force
-                     $parentFolder = $deepX64.Parent.FullName
-                     Get-ChildItem $parentFolder -File | Where-Object { $_.Extension -eq ".txt" -or $_.Extension -eq ".cmd" } | Copy-Item -Destination "${INSTALL_PATH}" -Force
-                } else {
-                     throw "x86_64 folder not found in extracted archive"
-                }
-             } else {
-                 throw "Extraction failed - empty content"
-             }
+          $parentFolder = $exeFile.Directory.Parent
+          if ($parentFolder) {
+            Get-ChildItem $parentFolder.FullName -File | Where-Object { $_.Extension -eq ".txt" -or $_.Extension -eq ".cmd" } | Copy-Item -Destination "${installPath}" -Force
           }
 
           # Verify installation
-          if (!(Test-Path "${INSTALL_PATH}\\goodbyedpi.exe")) {
+          if (!(Test-Path "${installPath}\\goodbyedpi.exe")) {
             throw "Installation verification failed - goodbyedpi.exe not found"
           }
 
@@ -183,15 +270,29 @@ export default function GoodbyeDPI({ showToast }: GoodbyeDPIProps) {
   };
 
   const startGoodbyeDPI = async () => {
-    const mode = DPI_MODES.find(m => m.id === selectedMode);
+    const mode = activeModes.find(m => m.id === selectedMode);
     if (!mode) return;
 
     showToast('info', t('gdpi_starting'), t(mode.nameKey as any));
 
     try {
+      const installPath = currentVariant.installPath;
+      const startCommand = currentVariant.id === 'turkey'
+        ? `
+          $scriptPath = "${installPath}\\${mode.serviceScript ?? mode.script ?? ''}"
+          if (!(Test-Path $scriptPath)) { throw "Script not found: $scriptPath" }
+          cmd.exe /c "echo.| ""$scriptPath"""
+        `
+        : mode.script
+          ? `
+            Set-Location -Path "${installPath}"
+            & ".\\${mode.script}"
+          `
+          : `Start-Process -FilePath "${installPath}\\goodbyedpi.exe" -ArgumentList "${mode.command}" -WorkingDirectory "${installPath}" -WindowStyle Hidden`;
       await invoke('run_powershell', {
         command: `
-          Start-Process -FilePath "${INSTALL_PATH}\\goodbyedpi.exe" -ArgumentList "${mode.command}" -WorkingDirectory "${INSTALL_PATH}" -WindowStyle Hidden
+          Stop-Process -Name "goodbyedpi" -Force -ErrorAction SilentlyContinue
+          ${startCommand}
         `
       });
 
@@ -206,26 +307,42 @@ export default function GoodbyeDPI({ showToast }: GoodbyeDPIProps) {
     showToast('info', t('gdpi_stopping'), t('gdpi_stopping_desc'));
 
     try {
-      await invoke('run_powershell', {
-        command: `Stop-Process -Name "goodbyedpi" -Force -ErrorAction SilentlyContinue`
-      });
+      const result = await invoke('run_powershell', {
+        command: `
+          sc.exe stop "GoodbyeDPI" 2>$null
+          taskkill /f /im goodbyedpi.exe 2>$null
+          Stop-Process -Name "goodbyedpi" -Force -ErrorAction SilentlyContinue
+          $running = (Get-Process -Name "goodbyedpi" -ErrorAction SilentlyContinue) -ne $null
+          if ($running) { "RUNNING" } else { "STOPPED" }
+        `
+      }) as string;
 
-      setIsRunning(false);
-      showToast('success', t('gdpi_stopped'), t('gdpi_stopped_desc'));
+      if (result.trim().includes('STOPPED')) {
+        setIsRunning(false);
+        showToast('success', t('gdpi_stopped'), t('gdpi_stopped_desc'));
+      } else {
+        throw new Error('goodbyedpi still running');
+      }
     } catch (error) {
       showToast('error', t('gdpi_stop_error'), String(error));
     }
   };
 
   const installService = async () => {
-    const mode = DPI_MODES.find(m => m.id === selectedMode);
+    const mode = activeModes.find(m => m.id === selectedMode);
     if (!mode) return;
 
     showToast('info', t('gdpi_service_installing'), t('gdpi_service_installing_desc'));
 
     try {
-      await invoke('run_powershell', {
-        command: `
+      const installPath = currentVariant.installPath;
+      const serviceCommand = currentVariant.id === 'turkey'
+        ? `
+          $scriptPath = "${installPath}\\${mode.serviceScript ?? ''}"
+          if (!(Test-Path $scriptPath)) { throw "Service script not found: $scriptPath" }
+          cmd.exe /c "echo.| ""$scriptPath"""
+        `
+        : `
           # Stop existing if running
           Stop-Process -Name "goodbyedpi" -Force -ErrorAction SilentlyContinue
 
@@ -233,14 +350,16 @@ export default function GoodbyeDPI({ showToast }: GoodbyeDPIProps) {
           sc.exe delete "GoodbyeDPI" 2>$null
 
           # Create service
-          $exePath = "${INSTALL_PATH}\\goodbyedpi.exe"
+          $exePath = "${installPath}\\goodbyedpi.exe"
           $args = "${mode.command}"
 
           # Use sc.exe to create service
           sc.exe create "GoodbyeDPI" binPath= "$exePath $args" start= auto DisplayName= "GoodbyeDPI Service"
           sc.exe description "GoodbyeDPI" "Deep Packet Inspection circumvention utility"
           sc.exe start "GoodbyeDPI"
-        `
+        `;
+      await invoke('run_powershell', {
+        command: serviceCommand
       });
 
       setIsServiceInstalled(true);
@@ -274,7 +393,7 @@ export default function GoodbyeDPI({ showToast }: GoodbyeDPIProps) {
   const openInstallFolder = async () => {
     try {
       await invoke('run_powershell', {
-        command: `explorer.exe "${INSTALL_PATH}"`
+        command: `explorer.exe "${currentVariant.installPath}"`
       });
     } catch (error) {
       console.error('Failed to open folder:', error);
@@ -387,6 +506,58 @@ export default function GoodbyeDPI({ showToast }: GoodbyeDPIProps) {
         </div>
       </div>
 
+      {/* Variant Selection */}
+      <div className="control-card mb-lg" style={{ padding: 'var(--space-lg)' }}>
+        <h3 style={{ fontSize: 'var(--text-lg)', fontWeight: 600, color: 'var(--text-100)', marginBottom: 'var(--space-md)' }}>
+          {t('gdpi_variant_title')}
+        </h3>
+        <div className="card-grid">
+          {GOODBYEDPI_VARIANTS.map((variant) => (
+            <button
+              key={variant.id}
+              className="control-card"
+              style={{
+                padding: 'var(--space-lg)',
+                cursor: 'pointer',
+                border: selectedVariant === variant.id ? '2px solid var(--cyan)' : '1px solid var(--glass-border)',
+                background: selectedVariant === variant.id ? 'var(--cyan-15)' : 'var(--surface)',
+                textAlign: 'left'
+              }}
+              onClick={() => setSelectedVariant(variant.id)}
+              disabled={isRunning || isDownloading}
+            >
+              <div className="flex items-center gap-md mb-md">
+                <Globe size={20} color={selectedVariant === variant.id ? 'var(--cyan)' : 'var(--text-50)'} />
+                <span style={{ fontWeight: 600, color: 'var(--text-100)' }}>{t(variant.nameKey as any)}</span>
+                {variant.id === 'turkey' && (
+                  <span
+                    style={{
+                      fontSize: 'var(--text-xs)',
+                      padding: '2px 8px',
+                      background: 'var(--warning-bg)',
+                      color: 'var(--warning)',
+                      borderRadius: 'var(--radius-sm)',
+                      fontWeight: 500
+                    }}
+                  >
+                    TR
+                  </span>
+                )}
+              </div>
+              <p className="text-muted" style={{ fontSize: 'var(--text-sm)' }}>
+                {t(variant.descKey as any)}
+              </p>
+              {selectedVariant === variant.id && (
+                <div className="flex items-center gap-sm mt-md" style={{ color: 'var(--cyan)', fontSize: 'var(--text-xs)' }}>
+                  <CheckCircle size={14} />
+                  {t('selected')}
+                </div>
+              )}
+            </button>
+          ))}
+        </div>
+      </div>
+
       {/* Mode Selection */}
       {isInstalled && (
         <>
@@ -394,7 +565,7 @@ export default function GoodbyeDPI({ showToast }: GoodbyeDPIProps) {
             {t('gdpi_select_mode')}
           </h3>
           <div className="card-grid mb-lg">
-            {DPI_MODES.map((mode) => (
+            {activeModes.map((mode) => (
               <button
                 key={mode.id}
                 className="control-card"
@@ -465,22 +636,22 @@ export default function GoodbyeDPI({ showToast }: GoodbyeDPIProps) {
           </div>
 
           {/* Info Section */}
-          <div className="control-card mt-lg" style={{ padding: 'var(--space-lg)', background: 'var(--deep)' }}>
-            <div className="flex items-start gap-md">
-              <Info size={20} color="var(--cyan)" style={{ flexShrink: 0, marginTop: 2 }} />
-              <div>
-                <p className="text-muted" style={{ fontSize: 'var(--text-sm)', lineHeight: 1.6 }}>
-                  {t('gdpi_info')}
-                </p>
-                <a
-                  href="#"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    invoke('run_powershell', { command: 'Start-Process "https://github.com/ValdikSS/GoodbyeDPI"' });
-                  }}
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
+        <div className="control-card mt-lg" style={{ padding: 'var(--space-lg)', background: 'var(--deep)' }}>
+          <div className="flex items-start gap-md">
+            <Info size={20} color="var(--cyan)" style={{ flexShrink: 0, marginTop: 2 }} />
+            <div>
+              <p className="text-muted" style={{ fontSize: 'var(--text-sm)', lineHeight: 1.6 }}>
+                {t('gdpi_info')}
+              </p>
+              <a
+                href="#"
+                onClick={(e) => {
+                  e.preventDefault();
+                  invoke('run_powershell', { command: `Start-Process "${currentVariant.repoUrl}"` });
+                }}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
                     gap: 'var(--space-xs)',
                     color: 'var(--cyan)',
                     fontSize: 'var(--text-sm)',

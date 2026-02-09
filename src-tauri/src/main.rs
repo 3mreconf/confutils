@@ -1,23 +1,24 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-mod commands;
 mod anti_debug;
+mod commands;
 mod hwid;
 mod security;
+mod taskbar;
 
-use tauri::Manager;
+use obfstr::obfstr;
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{TrayIconBuilder, TrayIconEvent};
-use obfstr::obfstr;
+use tauri::Manager;
 
 fn main() {
     if anti_debug::is_being_debugged() {
         std::process::exit(0);
     }
+    taskbar::handle_cli_apply();
 
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
-        .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             if let Some(window) = app.get_webview_window(obfstr!("main")) {
                 let _ = window.show();
@@ -26,18 +27,29 @@ fn main() {
             }
         }))
         .setup(|app| {
-            std::thread::spawn(|| {
-                loop {
-                    if anti_debug::is_being_debugged() {
-                        std::process::exit(0);
-                    }
-                    std::thread::sleep(std::time::Duration::from_secs(60));
+            std::thread::spawn(|| loop {
+                if anti_debug::is_being_debugged() {
+                    std::process::exit(0);
                 }
+                std::thread::sleep(std::time::Duration::from_secs(60));
             });
 
-            let show_i = MenuItem::with_id(app, obfstr!("show"), obfstr!("Show ConfUtils"), true, None::<&str>)?;
-            let hide_i = MenuItem::with_id(app, obfstr!("hide"), obfstr!("Hide to Tray"), true, None::<&str>)?;
-            let quit_i = MenuItem::with_id(app, obfstr!("quit"), obfstr!("Quit"), true, None::<&str>)?;
+            let show_i = MenuItem::with_id(
+                app,
+                obfstr!("show"),
+                obfstr!("Show ConfUtils"),
+                true,
+                None::<&str>,
+            )?;
+            let hide_i = MenuItem::with_id(
+                app,
+                obfstr!("hide"),
+                obfstr!("Hide to Tray"),
+                true,
+                None::<&str>,
+            )?;
+            let quit_i =
+                MenuItem::with_id(app, obfstr!("quit"), obfstr!("Quit"), true, None::<&str>)?;
 
             let menu = Menu::with_items(app, &[&show_i, &hide_i, &quit_i])?;
 
@@ -55,24 +67,22 @@ fn main() {
                         }
                     }
                 })
-                .on_menu_event(|app, event| {
-                    match event.id.as_ref() {
-                        "show" => {
-                            if let Some(window) = app.get_webview_window(obfstr!("main")) {
-                                let _ = window.show();
-                                let _ = window.set_focus();
-                            }
+                .on_menu_event(|app, event| match event.id.as_ref() {
+                    "show" => {
+                        if let Some(window) = app.get_webview_window(obfstr!("main")) {
+                            let _ = window.show();
+                            let _ = window.set_focus();
                         }
-                        "hide" => {
-                            if let Some(window) = app.get_webview_window(obfstr!("main")) {
-                                let _ = window.hide();
-                            }
-                        }
-                        "quit" => {
-                            std::process::exit(0);
-                        }
-                        _ => {}
                     }
+                    "hide" => {
+                        if let Some(window) = app.get_webview_window(obfstr!("main")) {
+                            let _ = window.hide();
+                        }
+                    }
+                    "quit" => {
+                        std::process::exit(0);
+                    }
+                    _ => {}
                 })
                 .build(app)?;
 
@@ -89,7 +99,10 @@ fn main() {
             commands::set_service_startup_type,
             commands::restart_service,
             commands::read_registry,
+            commands::get_registry_type,
             commands::write_registry,
+            commands::delete_registry_value,
+            commands::delete_registry_key,
             commands::get_system_info,
             commands::get_disk_usage,
             commands::check_windows_updates,
@@ -131,6 +144,26 @@ fn main() {
             commands::disable_consumer_features,
             commands::disable_game_dvr,
             commands::disable_hibernation,
+            commands::apply_hosts_blocklist,
+            commands::remove_hosts_blocklist,
+            commands::get_hosts_blocklist_status,
+            commands::apply_privacy_firewall_rules,
+            commands::remove_privacy_firewall_rules,
+            commands::get_privacy_firewall_status,
+            commands::open_device_manager,
+            commands::scan_device_issues,
+            commands::scan_outdated_drivers,
+            commands::scan_app_leftovers,
+            commands::scan_registry_health,
+            commands::apply_storage_sense_profile,
+            commands::run_privacy_audit,
+            commands::scan_hidden_services,
+            commands::scan_open_ports,
+            commands::analyze_junk_origins,
+            commands::apply_power_audio_optimizations,
+            commands::revert_power_audio_optimizations,
+            commands::monitor_app_usage,
+            commands::get_fast_startup_status,
             commands::set_power_plan,
             commands::get_current_power_plan,
             commands::set_terminal_default_ps7,
@@ -177,6 +210,8 @@ fn main() {
             commands::clone_messages,
             commands::start_live_message_cloner,
             commands::stop_live_message_cloner,
+            commands::cancel_message_clone,
+            commands::cancel_discord_clone,
             commands::spam_reactions,
             commands::change_nickname,
             commands::bulk_delete_messages,
@@ -185,11 +220,9 @@ fn main() {
             commands::clone_role,
             commands::check_token,
             commands::get_token_info,
-            commands::grab_avatar,
             commands::spam_webhook,
             commands::stop_webhook_spam,
             commands::delete_webhook,
-            commands::scrape_guild_members,
             commands::backup_guild,
             commands::restore_guild,
             commands::change_hypesquad_house,
@@ -213,6 +246,8 @@ fn main() {
             commands::secure_delete_file,
             commands::set_discord_rpc,
             commands::clear_discord_rpc,
+            commands::set_taskbar_appearance,
+            commands::install_translucenttb,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -1,6 +1,7 @@
 import { Shield, Cpu, HardDrive, Info, Sparkles, Github } from 'lucide-react';
 import { useI18n } from '../../i18n/I18nContext';
 import { open } from '@tauri-apps/plugin-shell';
+import { invoke } from '@tauri-apps/api/core';
 
 interface AboutProps {
   showToast: (type: 'success' | 'warning' | 'error' | 'info', title: string, message?: string) => void;
@@ -8,6 +9,39 @@ interface AboutProps {
 
 export default function About({ showToast }: AboutProps) {
   const { t } = useI18n();
+  const runAction = async (action: 'changelog' | 'license' | 'report' | 'profiles' | 'analytics') => {
+    try {
+      switch (action) {
+        case 'changelog':
+          open('https://github.com/3mreconf/confutils/releases');
+          return;
+        case 'license':
+          open('https://github.com/3mreconf/confutils/blob/main/LICENSE');
+          return;
+        case 'profiles':
+          await invoke('run_powershell', { command: 'New-Item -ItemType Directory -Force -Path "C:\\ProgramData\\ConfUtils\\Profiles" | Out-Null; Start-Process "C:\\ProgramData\\ConfUtils\\Profiles"' });
+          return;
+        case 'analytics':
+          await invoke('run_powershell', { command: 'Start-Process "ms-settings:storage"' });
+          return;
+        case 'report':
+        default:
+          await invoke('run_powershell', {
+            command: `
+              $reportDir = "C:\\ProgramData\\ConfUtils\\Reports"
+              New-Item -ItemType Directory -Force -Path $reportDir | Out-Null
+              $reportPath = Join-Path $reportDir ("security-report-" + (Get-Date -Format "yyyyMMdd-HHmmss") + ".txt")
+              Get-ComputerInfo | Out-File -FilePath $reportPath -Encoding UTF8
+              Start-Process $reportDir
+            `
+          });
+          return;
+      }
+    } catch (error) {
+      showToast('error', t('service_error'), String(error));
+    }
+  };
+
   return (
     <div>
       <div className="flex items-center justify-between mb-lg">
@@ -17,7 +51,7 @@ export default function About({ showToast }: AboutProps) {
           </h2>
           <p className="text-muted mt-sm">{t('about_subtitle')}</p>
         </div>
-        <button className="btn btn-secondary" onClick={() => showToast('info', t('about_changelog'), t('about_changelog_msg'))}>
+        <button className="btn btn-secondary" onClick={() => runAction('changelog')}>
           <Info size={16} />
           {t('about_changelog')}
         </button>
@@ -34,13 +68,13 @@ export default function About({ showToast }: AboutProps) {
               {t('premium')}
             </div>
           </div>
-          <div className="card-title">{t('version')} 2.1.22</div>
+          <div className="card-title">{t('version')} 2.1.23</div>
           <div className="card-description">
             {t('about_premium_desc')}
           </div>
           <div className="card-footer">
             <span className="card-meta">{t('build')}: 2026.02.05</span>
-            <button className="btn btn-primary" onClick={() => showToast('success', t('about_license'), t('about_license_msg'))}>
+            <button className="btn btn-primary" onClick={() => runAction('license')}>
               {t('about_license')}
             </button>
           </div>
@@ -62,7 +96,7 @@ export default function About({ showToast }: AboutProps) {
           </div>
           <div className="card-footer">
             <span className="card-meta">{t('modules')}: 6 {t('active')}</span>
-            <button className="btn btn-secondary" onClick={() => showToast('info', t('about_report'), t('about_report_msg'))}>
+            <button className="btn btn-secondary" onClick={() => runAction('report')}>
               {t('about_report')}
             </button>
           </div>
@@ -84,7 +118,7 @@ export default function About({ showToast }: AboutProps) {
           </div>
           <div className="card-footer">
             <span className="card-meta">{t('profiles')}: 4 {t('ready')}</span>
-            <button className="btn btn-secondary" onClick={() => showToast('info', t('about_profiles'), t('about_profiles_msg'))}>
+            <button className="btn btn-secondary" onClick={() => runAction('profiles')}>
               {t('about_profiles')}
             </button>
           </div>
@@ -106,7 +140,7 @@ export default function About({ showToast }: AboutProps) {
           </div>
           <div className="card-footer">
             <span className="card-meta">{t('space_reclaimed')}: 42 GB</span>
-            <button className="btn btn-secondary" onClick={() => showToast('info', t('about_analytics'), t('about_analytics_msg'))}>
+            <button className="btn btn-secondary" onClick={() => runAction('analytics')}>
               {t('about_analytics')}
             </button>
           </div>
