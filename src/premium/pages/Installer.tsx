@@ -285,7 +285,7 @@ export default function Installer({ showToast, externalQuery }: InstallerProps) 
     setIsScanning(true);
     try {
       const result = await invoke('run_powershell', {
-        command: 'winget list --accept-source-agreements 2>$null | Out-String'
+        command: 'winget list --accept-source-agreements | Out-String'
       }) as string;
 
       if (result) {

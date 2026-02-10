@@ -1,7 +1,3 @@
-
-import { DEFAULT_RATE_LIMITS } from './types';
-
-
 export const validateToken = (token: string): boolean => {
   if (!token || token.trim().length === 0) return false;
   
@@ -94,17 +90,6 @@ export const formatEmojiForAPI = (emoji: string): string => {
   }
   
   return encodeURIComponent(emoji);
-};
-
-
-export const calculateRateLimitDelay = (
-  actionType: string,
-  customDelay?: number
-): number => {
-  if (customDelay !== undefined) return customDelay;
-  
-  const config = DEFAULT_RATE_LIMITS[actionType];
-  return config ? config.delayMs : 1000;
 };
 
 

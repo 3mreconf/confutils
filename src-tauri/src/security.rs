@@ -1,5 +1,6 @@
+#[allow(dead_code)]
 pub fn sanitize_powershell_input(input: &str) -> Result<String, String> {
-    let mut sanitized = input.trim().to_string();
+    let sanitized = input.trim().to_string();
     
     if sanitized.contains("`") {
         return Err("Güvenlik: Tehlikeli karakter tespit edildi: `".to_string());
@@ -43,9 +44,7 @@ pub fn sanitize_powershell_input(input: &str) -> Result<String, String> {
     if sanitized.len() > 20000 {
         return Err("Güvenlik: Girdi çok uzun (max 20000 karakter)".to_string());
     }
-    
-    sanitized = sanitized.replace("'", "''");
-    
+
     Ok(sanitized)
 }
 

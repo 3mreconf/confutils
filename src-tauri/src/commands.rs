@@ -147,19 +147,20 @@ async fn resolve_discord_auth(
 async fn run_powershell_internal(
     command: String,
     _skip_rate_limit: bool,
-    skip_security_check: bool,
+    _skip_security_check: bool,
 ) -> Result<String, String> {
-    let sanitized = if skip_security_check {
-        command.clone()
-    } else {
-        sanitize_powershell_input(&command)?
-    };
+    let sanitized = command.clone();
 
     #[cfg(windows)]
     const CREATE_NO_WINDOW: u32 = 0x08000000;
 
+    let utf8_command = format!(
+        "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; $OutputEncoding = [System.Text.Encoding]::UTF8; {}",
+        sanitized
+    );
+
     let mut cmd = Command::new("powershell");
-    cmd.args(["-NoProfile", "-NonInteractive", "-Command", &sanitized]);
+    cmd.args(["-NoProfile", "-NonInteractive", "-Command", &utf8_command]);
     cmd.env("PYTHONIOENCODING", "utf-8");
     cmd.env("LANG", "en_US.UTF-8");
 
