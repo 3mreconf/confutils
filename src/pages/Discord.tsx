@@ -1,30 +1,31 @@
-import React from 'react';
-import { UtilityCard } from '../components/Cards/UtilityCard';
-import { Server, MessageSquare, Smile, User, Trash2, Mail, Eraser, Shield, CheckCircle, Info, Image, Webhook, Users, HardDrive, Sparkles, Gamepad2 } from 'lucide-react';
+import React, { useState } from 'react';
+import { Server, Copy, Shield, Hash, Smile, Image, Lock, ArrowRight, ChevronDown, ChevronUp } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useModal } from '../contexts/ModalContext';
 import { DiscordClonerModal } from '../components/Discord/DiscordClonerModal';
-import { MessageClonerModal } from '../components/Discord/MessageClonerModal';
-import { ReactionSpammerModal } from '../components/Discord/ReactionSpammerModal';
-import { NicknameChangerModal } from '../components/Discord/NicknameChangerModal';
-import { BulkDeleteModal } from '../components/Discord/BulkDeleteModal';
-import { DmBomberModal } from '../components/Discord/DmBomberModal';
-import { ChannelPurgeModal } from '../components/Discord/ChannelPurgeModal';
-import { RoleClonerModal } from '../components/Discord/RoleClonerModal';
-import { TokenCheckerModal } from '../components/Discord/TokenCheckerModal';
-import { TokenInfoModal } from '../components/Discord/TokenInfoModal';
-import { AvatarGrabberModal } from '../components/Discord/AvatarGrabberModal';
-import { WebhookSpammerModal } from '../components/Discord/WebhookSpammerModal';
-import { WebhookDeleterModal } from '../components/Discord/WebhookDeleterModal';
-import { MemberScraperModal } from '../components/Discord/MemberScraperModal';
-import { ServerBackupModal } from '../components/Discord/ServerBackupModal';
-import { HypesquadChangerModal } from '../components/Discord/HypesquadChangerModal';
-import { CustomRPCModal } from '../components/Discord/CustomRPCModal';
 import './Discord.css';
+
+const FEATURES = [
+  { icon: Server, key: 'server_name' },
+  { icon: Image, key: 'server_icon' },
+  { icon: Shield, key: 'roles' },
+  { icon: Hash, key: 'channels' },
+  { icon: Smile, key: 'emojis' },
+  { icon: Lock, key: 'channel_permissions' },
+] as const;
+
+const LIMITATIONS = [
+  'messages',
+  'members',
+  'webhooks',
+  'invites',
+  'boosts',
+] as const;
 
 const Discord: React.FC = () => {
   const { t } = useLanguage();
   const { openModal } = useModal();
+  const [showLimitations, setShowLimitations] = useState(false);
 
   const handleOpenCloner = () => {
     openModal(
@@ -35,336 +36,76 @@ const Discord: React.FC = () => {
     );
   };
 
-  const handleOpenMessageCloner = () => {
-    openModal(
-      'message-cloner',
-      t('discord_message_cloner_title'),
-      <MessageClonerModal modalId="message-cloner" />,
-      t('discord_message_cloner_description')
-    );
-  };
-
-  const handleOpenReactionSpammer = () => {
-    openModal(
-      'reaction-spammer',
-      t('discord_reaction_spammer_title'),
-      <ReactionSpammerModal modalId="reaction-spammer" />,
-      t('discord_reaction_spammer_description')
-    );
-  };
-
-  const handleOpenNicknameChanger = () => {
-    openModal(
-      'nickname-changer',
-      t('discord_nickname_changer_title'),
-      <NicknameChangerModal modalId="nickname-changer" />,
-      t('discord_nickname_changer_description')
-    );
-  };
-
-  const handleOpenBulkDelete = () => {
-    openModal(
-      'bulk-delete',
-      t('discord_bulk_delete_title'),
-      <BulkDeleteModal modalId="bulk-delete" />,
-      t('discord_bulk_delete_description')
-    );
-  };
-
-  const handleOpenDmBomber = () => {
-    openModal(
-      'dm-bomber',
-      t('discord_dm_bomber_title'),
-      <DmBomberModal modalId="dm-bomber" />,
-      t('discord_dm_bomber_description')
-    );
-  };
-
-  const handleOpenChannelPurge = () => {
-    openModal(
-      'channel-purge',
-      t('discord_channel_purge_title'),
-      <ChannelPurgeModal modalId="channel-purge" />,
-      t('discord_channel_purge_description')
-    );
-  };
-
-  const handleOpenRoleCloner = () => {
-    openModal(
-      'role-cloner',
-      t('discord_role_cloner_title'),
-      <RoleClonerModal modalId="role-cloner" />,
-      t('discord_role_cloner_description')
-    );
-  };
-
-  const handleOpenTokenChecker = () => {
-    openModal(
-      'token-checker',
-      t('discord_token_checker_title'),
-      <TokenCheckerModal modalId="token-checker" />,
-      t('discord_token_checker_description')
-    );
-  };
-
-  const handleOpenTokenInfo = () => {
-    openModal(
-      'token-info',
-      t('discord_token_info_title'),
-      <TokenInfoModal modalId="token-info" />,
-      t('discord_token_info_description')
-    );
-  };
-
-  const handleOpenAvatarGrabber = () => {
-    openModal(
-      'avatar-grabber',
-      t('discord_avatar_grabber_title'),
-      <AvatarGrabberModal modalId="avatar-grabber" />,
-      t('discord_avatar_grabber_description')
-    );
-  };
-
-  const handleOpenWebhookSpammer = () => {
-    openModal(
-      'webhook-spammer',
-      t('discord_webhook_spammer_title'),
-      <WebhookSpammerModal modalId="webhook-spammer" />,
-      t('discord_webhook_spammer_description')
-    );
-  };
-
-  const handleOpenWebhookDeleter = () => {
-    openModal(
-      'webhook-deleter',
-      t('discord_webhook_deleter_title'),
-      <WebhookDeleterModal modalId="webhook-deleter" />,
-      t('discord_webhook_deleter_description')
-    );
-  };
-
-  const handleOpenMemberScraper = () => {
-    openModal(
-      'member-scraper',
-      t('discord_member_scraper_title'),
-      <MemberScraperModal modalId="member-scraper" />,
-      t('discord_member_scraper_description')
-    );
-  };
-
-  const handleOpenServerBackup = () => {
-    openModal(
-      'server-backup',
-      t('discord_server_backup_title'),
-      <ServerBackupModal modalId="server-backup" />,
-      t('discord_server_backup_description')
-    );
-  };
-
-  const handleOpenHypesquadChanger = () => {
-    openModal(
-      'hypesquad-changer',
-      t('discord_hypesquad_title'),
-      <HypesquadChangerModal modalId="hypesquad-changer" />,
-      t('discord_hypesquad_description')
-    );
-  };
-
-  const handleOpenCustomRPC = () => {
-    openModal(
-      'custom-rpc',
-      t('discord_custom_rpc_title') || 'Custom RPC',
-      <CustomRPCModal modalId="custom-rpc" />,
-      t('discord_custom_rpc_description') || 'Customize your Discord status'
-    );
-  };
-
   return (
     <div className="page-container discord-page">
-      <div className="page-header">
-        <h1>{t('discord_page_title')}</h1>
-        <p>{t('discord_page_description')}</p>
+
+      <div className="dc-hero">
+        <div className="dc-hero-glow" />
+        <div className="dc-hero-content">
+          <div className="dc-hero-badge">
+            <Server size={14} />
+            <span>Server Cloner</span>
+          </div>
+          <h1 className="dc-hero-title">{t('discord_server_cloner_title')}</h1>
+          <p className="dc-hero-desc">{t('discord_server_cloner_description')}</p>
+          <button className="dc-hero-btn" onClick={handleOpenCloner}>
+            <Copy size={15} />
+            <span>{t('discord_start_cloning')}</span>
+            <ArrowRight size={15} />
+          </button>
+        </div>
       </div>
 
-      <div className="grid-auto">
-        
-        <UtilityCard
-          icon={Server}
-          title={t('discord_server_cloner_title')}
-          description={t('discord_server_cloner_description')}
-          actionType="button"
-          variant="info"
-          actionLabel={t('discord_start_cloning')}
-          onClick={handleOpenCloner}
-        />
-
-        <UtilityCard
-          icon={HardDrive}
-          title={t('discord_server_backup_title')}
-          description={t('discord_server_backup_description')}
-          actionType="button"
-          variant="info"
-          actionLabel={t('discord_open_tool')}
-          onClick={handleOpenServerBackup}
-        />
-
-        
-        <UtilityCard
-          icon={MessageSquare}
-          title={t('discord_message_cloner_title')}
-          description={t('discord_message_cloner_description')}
-          actionType="button"
-          variant="info"
-          actionLabel={t('discord_start_message_cloning')}
-          onClick={handleOpenMessageCloner}
-        />
-
-        <UtilityCard
-          icon={Smile}
-          title={t('discord_reaction_spammer_title')}
-          description={t('discord_reaction_spammer_description')}
-          actionType="button"
-          variant="info"
-          actionLabel={t('discord_open_tool')}
-          onClick={handleOpenReactionSpammer}
-        />
-
-        <UtilityCard
-          icon={Trash2}
-          title={t('discord_bulk_delete_title')}
-          description={t('discord_bulk_delete_description')}
-          actionType="button"
-          variant="warning"
-          actionLabel={t('discord_open_tool')}
-          onClick={handleOpenBulkDelete}
-        />
-
-        <UtilityCard
-          icon={Eraser}
-          title={t('discord_channel_purge_title')}
-          description={t('discord_channel_purge_description')}
-          actionType="button"
-          variant="warning"
-          actionLabel={t('discord_open_tool')}
-          onClick={handleOpenChannelPurge}
-        />
-
-        
-        <UtilityCard
-          icon={Users}
-          title={t('discord_member_scraper_title')}
-          description={t('discord_member_scraper_description')}
-          actionType="button"
-          variant="info"
-          actionLabel={t('discord_open_tool')}
-          onClick={handleOpenMemberScraper}
-        />
-
-        <UtilityCard
-          icon={User}
-          title={t('discord_nickname_changer_title')}
-          description={t('discord_nickname_changer_description')}
-          actionType="button"
-          variant="info"
-          actionLabel={t('discord_open_tool')}
-          onClick={handleOpenNicknameChanger}
-        />
-
-        <UtilityCard
-          icon={Mail}
-          title={t('discord_dm_bomber_title')}
-          description={t('discord_dm_bomber_description')}
-          actionType="button"
-          variant="warning"
-          actionLabel={t('discord_open_tool')}
-          onClick={handleOpenDmBomber}
-        />
-
-        
-        <UtilityCard
-          icon={Shield}
-          title={t('discord_role_cloner_title')}
-          description={t('discord_role_cloner_description')}
-          actionType="button"
-          variant="info"
-          actionLabel={t('discord_open_tool')}
-          onClick={handleOpenRoleCloner}
-        />
-
-        
-        <UtilityCard
-          icon={Sparkles}
-          title={t('discord_hypesquad_title')}
-          description={t('discord_hypesquad_description')}
-          actionType="button"
-          variant="info"
-          actionLabel={t('discord_open_tool')}
-          onClick={handleOpenHypesquadChanger}
-        />
-
-        <UtilityCard
-          icon={Gamepad2}
-          title={t('discord_custom_rpc_title') || 'Custom RPC'}
-          description={t('discord_custom_rpc_description') || 'Set a custom playing status'}
-          actionType="button"
-          variant="info"
-          actionLabel={t('discord_open_tool')}
-          onClick={handleOpenCustomRPC}
-        />
-
-        <UtilityCard
-          icon={Image}
-          title={t('discord_avatar_grabber_title')}
-          description={t('discord_avatar_grabber_description')}
-          actionType="button"
-          variant="info"
-          actionLabel={t('discord_open_tool')}
-          onClick={handleOpenAvatarGrabber}
-        />
-
-        
-        <UtilityCard
-          icon={CheckCircle}
-          title={t('discord_token_checker_title')}
-          description={t('discord_token_checker_description')}
-          actionType="button"
-          variant="info"
-          actionLabel={t('discord_open_tool')}
-          onClick={handleOpenTokenChecker}
-        />
-
-        <UtilityCard
-          icon={Info}
-          title={t('discord_token_info_title')}
-          description={t('discord_token_info_description')}
-          actionType="button"
-          variant="info"
-          actionLabel={t('discord_open_tool')}
-          onClick={handleOpenTokenInfo}
-        />
-
-        
-        <UtilityCard
-          icon={Webhook}
-          title={t('discord_webhook_spammer_title')}
-          description={t('discord_webhook_spammer_description')}
-          actionType="button"
-          variant="warning"
-          actionLabel={t('discord_open_tool')}
-          onClick={handleOpenWebhookSpammer}
-        />
-
-        <UtilityCard
-          icon={Trash2}
-          title={t('discord_webhook_deleter_title')}
-          description={t('discord_webhook_deleter_description')}
-          actionType="button"
-          variant="danger"
-          actionLabel={t('discord_open_tool')}
-          onClick={handleOpenWebhookDeleter}
-        />
+      <div className="dc-section">
+        <h2 className="dc-section-title">{t('discord_what_will_be_cloned') || 'Cloneable Elements'}</h2>
+        <div className="dc-features-grid">
+          {FEATURES.map(({ icon: Icon, key }) => (
+            <button
+              key={key}
+              className="dc-feature-card"
+              onClick={handleOpenCloner}
+              type="button"
+            >
+              <div className="dc-feature-icon">
+                <Icon size={18} />
+              </div>
+              <div className="dc-feature-info">
+                <span className="dc-feature-label">
+                  {t(`discord_option_${key}`) || key}
+                </span>
+                <span className="dc-feature-desc">
+                  {t(`discord_will_clone_${key}`) || ''}
+                </span>
+              </div>
+              <ArrowRight size={14} className="dc-feature-arrow" />
+            </button>
+          ))}
+        </div>
       </div>
+
+      <div className="dc-section">
+        <button
+          className="dc-limitations-toggle"
+          onClick={() => setShowLimitations(!showLimitations)}
+          type="button"
+        >
+          <span>{t('discord_what_will_not_be_cloned') || 'Limitations'}</span>
+          {showLimitations ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+        </button>
+        {showLimitations && (
+          <div className="dc-limitations">
+            {LIMITATIONS.map((key) => (
+              <div key={key} className="dc-limitation-item">
+                <span className="dc-limitation-dot" />
+                <span>{t(`discord_wont_clone_${key}`) || key}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
     </div>
   );
 };
+
 export default Discord;

@@ -12,6 +12,7 @@ import {
   Info,
   Search,
   Bell,
+  MessageSquare,
   ChevronRight,
   CheckCircle,
   AlertTriangle,
@@ -48,6 +49,8 @@ const NetworkPage = lazy(() => import('./premium/pages/Network'));
 const UpdatesPage = lazy(() => import('./premium/pages/Updates'));
 const BackupPage = lazy(() => import('./premium/pages/Backup'));
 const GoodbyeDPIPage = lazy(() => import('./premium/pages/GoodbyeDPI'));
+const DiscordPage = lazy(() => import('./premium/pages/Discord'));
+
 const SettingsPage = lazy(() => import('./premium/pages/Settings'));
 const AboutPage = lazy(() => import('./premium/pages/About'));
 
@@ -90,6 +93,7 @@ const navGroups: NavGroup[] = [
   {
     titleKey: 'nav_tools',
     items: [
+      { id: 'discord', labelKey: 'nav_discord', icon: MessageSquare },
       { id: 'installer', labelKey: 'nav_installer', icon: Download },
       { id: 'backup', labelKey: 'nav_backup', icon: Database },
       { id: 'goodbyedpi', labelKey: 'nav_goodbyedpi', icon: Globe },
@@ -199,7 +203,7 @@ function PremiumApp() {
         if (response.ok) {
           const data = await response.json();
           const latestVersion = data.tag_name.replace('v', '');
-          const currentVersion = '2.1.30'; // Updated to match package.json/translations
+          const currentVersion = '2.1.31'; // Updated to match package.json/translations
 
           const compareVersions = (v1: string, v2: string) => {
             const parts1 = v1.split('.').map(Number);
@@ -379,6 +383,7 @@ function PremiumApp() {
       monitor: t('nav_monitor' as any),
       settings: t('nav_settings' as any),
       network: t('nav_network' as any),
+      discord: t('nav_discord' as any),
       updates: t('nav_updates' as any),
     };
     const map = new Map<string, SearchResult[]>();
@@ -414,6 +419,7 @@ function PremiumApp() {
       debloater: t('nav_debloater' as any),
       privacy: t('nav_privacy' as any),
       network: t('nav_network' as any),
+      discord: t('nav_discord' as any),
       installer: t('nav_installer' as any),
       backup: t('nav_backup' as any),
       settings: t('nav_settings' as any),
@@ -445,6 +451,7 @@ function PremiumApp() {
         return <PrivacyPage {...pageProps} externalQuery={pageSearch.privacy} />;
       case 'network':
         return <NetworkPage {...pageProps} />;
+      case 'discord': return <DiscordPage {...pageProps} />;
       case 'installer':
         return <InstallerPage {...pageProps} externalQuery={pageSearch.installer} />;
       case 'backup':

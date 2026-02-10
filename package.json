@@ -1,7 +1,7 @@
 {
     "name":  "confutils",
     "private":  true,
-    "version":  "2.1.30",
+    "version":  "2.1.31",
     "type":  "module",
     "scripts":  {
                     "dev":  "vite",
@@ -20,7 +20,10 @@
                 },
     "dependencies":  {
                          "@tauri-apps/api":  "^2.2.0",
+                         "@tauri-apps/plugin-dialog":  "^2.6.0",
                          "@tauri-apps/plugin-shell":  "^2.3.3",
+                         "@types/crypto-js":  "^4.2.2",
+                         "crypto-js":  "^4.2.0",
                          "lucide-react":  "^0.562.0",
                          "react":  "^19.2.3",
                          "react-dom":  "^19.2.3"

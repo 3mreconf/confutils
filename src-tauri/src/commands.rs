@@ -3175,9 +3175,18 @@ pub async fn clone_discord_server(
                     r["name"].as_str() != Some("@everyone") && r["managed"].as_bool() != Some(true)
                 });
 
-                for role in roles_array {
+                roles_array.sort_by(|a, b| {
+                    let pa = a["position"].as_i64().unwrap_or(0);
+                    let pb = b["position"].as_i64().unwrap_or(0);
+                    pa.cmp(&pb)
+                });
+
+                let mut position_map: Vec<(i64, String)> = Vec::new();
+
+                for role in &roles_array {
                     check_cancel()?;
                     if let Some(role_name) = role["name"].as_str() {
+                        let original_position = role["position"].as_i64().unwrap_or(0);
                         let role_data = serde_json::json!({
                             "name": role_name,
                             "permissions": role["permissions"].as_str().unwrap_or("0"),
@@ -3204,6 +3213,7 @@ pub async fn clone_discord_server(
                                         (role["id"].as_str(), new_role["id"].as_str())
                                     {
                                         role_id_map.insert(old_id.to_string(), new_id.to_string());
+                                        position_map.push((original_position, new_id.to_string()));
                                     }
                                     emit_log(format!("[+] Created role: {}", role_name));
                                 } else {
@@ -3224,6 +3234,47 @@ pub async fn clone_discord_server(
 
                         tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
                     }
+                }
+
+                if !position_map.is_empty() {
+                    emit_log("[+] Reordering roles to match source hierarchy...".to_string());
+                    position_map.sort_by(|a, b| a.0.cmp(&b.0));
+
+                    let positions_payload: Vec<Value> = position_map
+                        .iter()
+                        .enumerate()
+                        .map(|(i, (_, new_id))| {
+                            serde_json::json!({
+                                "id": new_id,
+                                "position": (i as i64) + 1
+                            })
+                        })
+                        .collect();
+
+                    let reorder_url = format!("{}/guilds/{}/roles", base_url, target_server_id);
+                    match client
+                        .patch(&reorder_url)
+                        .header("Authorization", &user_token)
+                        .header("Content-Type", "application/json")
+                        .json(&positions_payload)
+                        .send()
+                        .await
+                    {
+                        Ok(resp) => {
+                            if resp.status().is_success() {
+                                emit_log("[+] Roles reordered successfully".to_string());
+                            } else {
+                                emit_log(format!(
+                                    "[WARNING] Failed to reorder roles (Status: {})",
+                                    resp.status()
+                                ));
+                            }
+                        }
+                        Err(e) => {
+                            emit_log(format!("[ERROR] Failed to reorder roles: {}", e));
+                        }
+                    }
+                    tokio::time::sleep(tokio::time::Duration::from_millis(1500)).await;
                 }
             }
         } else {
