@@ -9,7 +9,7 @@ import { trTweaks } from './tr_tweaks';
 export const translations = {
   en: {
     app_name: 'ConfUtils',
-    app_version: 'v2.1.33',
+    app_version: 'v2.1.34',
     nav_overview: 'Overview',
     nav_system: 'System',
     nav_security: 'Security',
