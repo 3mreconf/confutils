@@ -202,6 +202,12 @@ const HeaderComponent: React.FC<HeaderProps> = ({ title, subtitle, onPageChange 
   return (
     <header className="header glass">
       <div className="header-left">
+        <img
+          className="app-logo"
+          src="/app-icon.svg"
+          alt="ConfUtils"
+          draggable={false}
+        />
         <div className="header-title-group">
           <h1 className="header-title">{title}</h1>
           {subtitle && <p className="header-subtitle">{subtitle}</p>}

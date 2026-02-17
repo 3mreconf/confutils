@@ -6,9 +6,11 @@ import {
   Shield,
   Monitor,
   Cloud,
-  CheckCircle
+  CheckCircle,
+  Globe
 } from 'lucide-react';
 import { useI18n } from '../../i18n/I18nContext';
+import type { LanguageCode } from '../../i18n/translations';
 
 interface SettingsProps {
   showToast: (type: 'success' | 'warning' | 'error' | 'info', title: string, message?: string) => void;
@@ -57,8 +59,13 @@ const buildSettingBlocks = (t: (key: any) => string) => ([
   }
 ]);
 
+const LANGUAGES: { code: LanguageCode; label: string; flag: string }[] = [
+  { code: 'en', label: 'English', flag: '🇬🇧' },
+  { code: 'tr', label: 'Türkçe', flag: '🇹🇷' }
+];
+
 export default function Settings({ showToast }: SettingsProps) {
-  const { t } = useI18n();
+  const { t, lang, setLang } = useI18n();
   const [saving, setSaving] = useState(false);
   const settingBlocks = buildSettingBlocks(t);
 
@@ -82,6 +89,12 @@ export default function Settings({ showToast }: SettingsProps) {
     }
   };
 
+  const handleLanguageChange = (code: LanguageCode) => {
+    setLang(code);
+    const selected = LANGUAGES.find(l => l.code === code);
+    showToast('success', t('settings_saved'), selected?.label ?? code);
+  };
+
   return (
     <div>
       <div className="flex items-center justify-between mb-lg">
@@ -95,6 +108,34 @@ export default function Settings({ showToast }: SettingsProps) {
           <CheckCircle size={16} />
           {saving ? t('settings_saving') : t('settings_save')}
         </button>
+      </div>
+
+      {/* Language Selector Card */}
+      <div className="control-card" style={{ marginBottom: 'var(--space-lg)' }}>
+        <div className="card-header">
+          <div className="card-icon-wrapper">
+            <Globe size={20} />
+          </div>
+          <div className="card-status">
+            <span className="card-status-dot" />
+            {LANGUAGES.find(l => l.code === lang)?.flag} {LANGUAGES.find(l => l.code === lang)?.label}
+          </div>
+        </div>
+        <div className="card-title">{t('settings_block_language_title')}</div>
+        <div className="card-description">{t('settings_block_language_desc')}</div>
+        <div className="card-footer" style={{ gap: 'var(--space-sm)' }}>
+          {LANGUAGES.map(({ code, label, flag }) => (
+            <button
+              key={code}
+              className={`btn ${lang === code ? 'btn-primary' : 'btn-secondary'}`}
+              onClick={() => handleLanguageChange(code)}
+              style={{ minWidth: 120 }}
+            >
+              <span style={{ marginRight: 6 }}>{flag}</span>
+              {label}
+            </button>
+          ))}
+        </div>
       </div>
 
       <div className="card-grid">

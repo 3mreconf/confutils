@@ -62,6 +62,16 @@ fn main() {
     #[cfg(windows)]
     build_taskbar_tap();
 
+    // Ensure `tauri dev` picks up icon changes without requiring a manual clean.
+    // Cargo only re-runs build scripts when inputs change (tracked via rerun-if-changed).
+    println!("cargo:rerun-if-changed=app-icon.svg");
+    println!("cargo:rerun-if-changed=icons/icon.ico");
+    println!("cargo:rerun-if-changed=icons/icon.icns");
+    println!("cargo:rerun-if-changed=icons/icon.png");
+    println!("cargo:rerun-if-changed=icons/32x32.png");
+    println!("cargo:rerun-if-changed=icons/128x128.png");
+    println!("cargo:rerun-if-changed=icons/128x128@2x.png");
+
     let mut windows = tauri_build::WindowsAttributes::new();
 
     windows = windows.app_manifest(r#"<assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">

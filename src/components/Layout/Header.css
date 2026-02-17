@@ -31,6 +31,16 @@ input {
   gap: 20px;
 }
 
+.app-logo {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  border: 1px solid var(--glass-border);
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.35);
+  flex-shrink: 0;
+  user-select: none;
+}
+
 .header-title-group {
   display: flex;
   flex-direction: column;

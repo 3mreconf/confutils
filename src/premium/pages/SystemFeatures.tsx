@@ -112,7 +112,7 @@ Set-Service -Name sshd -StartupType Automatic
 };
 
 export default function SystemFeatures({ showToast, compact, externalQuery }: SystemFeaturesProps) {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState('all');
   const [processing, setProcessing] = useState<Record<string, boolean>>({});
@@ -146,21 +146,35 @@ export default function SystemFeatures({ showToast, compact, externalQuery }: Sy
     }
   };
 
-  const titleLabel = (value?: string) => value || '';
+  const getTitle = (id: string, value: string = '') => {
+    if (lang === 'en') return value;
+    const key = `feat_${id}_title`;
+    const val = t(key as any);
+    return val === key ? value : val;
+  };
+
+  const getDesc = (id: string, value: string = '') => {
+    if (lang === 'en') return value;
+    const key = `feat_${id}_desc`;
+    const val = t(key as any);
+    return val === key ? value : val;
+  };
 
   const list = useMemo(() => {
     const q = query.trim().toLowerCase();
     return Object.entries(features)
       .map(([id, item]) => ({ id, ...item }))
       .filter((item) => (category === 'all' ? true : item.category === category))
-      .filter((item) =>
-        q
-          ? (item.Content || '').toLowerCase().includes(q) ||
-            (item.Description || '').toLowerCase().includes(q)
-          : true
-      )
+      .filter((item) => {
+        // Enhance search to look at translated values too if needed, but for now strict efficient search on raw data
+        // actually searching on displayed text is better for user experience
+        const title = getTitle(item.id, item.Content);
+        const desc = getDesc(item.id, item.Description);
+        if (!q) return true;
+        return (title || '').toLowerCase().includes(q) || (desc || '').toLowerCase().includes(q);
+      })
       .sort((a, b) => (a.Order || '').localeCompare(b.Order || ''));
-  }, [query, category]);
+  }, [query, category, lang]);
 
   const runAction = async (id: string) => {
     const item = features[id];
@@ -172,7 +186,7 @@ export default function SystemFeatures({ showToast, compact, externalQuery }: Sy
         throw new Error('No script to run');
       } else {
         await invoke('run_powershell', { command: cmd });
-        showToast('success', t('features_done' as any), item.Content);
+        showToast('success', t('features_done' as any), getTitle(id, item.Content));
       }
     } catch (err: any) {
       showToast('error', t('features_failed' as any), String(err));
@@ -185,10 +199,10 @@ export default function SystemFeatures({ showToast, compact, externalQuery }: Sy
     <div>
       {!compact && (
         <div className="mb-lg">
-        <h2 style={{ fontSize: 'var(--text-2xl)', fontWeight: 600, color: 'var(--text-100)' }}>
-          {t('features_title' as any)}
-        </h2>
-        <p className="text-muted mt-sm">{t('features_subtitle' as any)}</p>
+          <h2 style={{ fontSize: 'var(--text-2xl)', fontWeight: 600, color: 'var(--text-100)' }}>
+            {t('features_title' as any)}
+          </h2>
+          <p className="text-muted mt-sm">{t('features_subtitle' as any)}</p>
         </div>
       )}
 
@@ -222,6 +236,9 @@ export default function SystemFeatures({ showToast, compact, externalQuery }: Sy
           const canRun = hasScript;
           const hasFeature = !!(item.feature && item.feature.length);
           const actionLabel = hasFeature ? t('features_enable' as any) : t('action_apply' as any);
+          const title = getTitle(item.id, item.Content);
+          const desc = getDesc(item.id, item.Description);
+
           return (
             <div key={item.id} className="control-card">
               <div className="card-header">
@@ -233,8 +250,8 @@ export default function SystemFeatures({ showToast, compact, externalQuery }: Sy
                   {categoryLabel(item.category)}
                 </div>
               </div>
-              <h3 className="card-title">{titleLabel(item.Content)}</h3>
-              <p className="card-description">{item.Description || ''}</p>
+              <h3 className="card-title">{title}</h3>
+              <p className="card-description">{desc}</p>
               <div className="card-footer">
                 <button
                   className="btn btn-primary"

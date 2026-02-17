@@ -3953,6 +3953,190 @@ use tokio::sync::Mutex;
 lazy_static::lazy_static! {
     static ref LIVE_CLONER_RUNNING: Arc<Mutex<bool>> = Arc::new(Mutex::new(false));
     static ref WEBHOOK_SPAM_RUNNING: Arc<Mutex<bool>> = Arc::new(Mutex::new(false));
+    static ref DRIVER_BG_STATE: Arc<Mutex<DriverBackgroundState>> =
+        Arc::new(Mutex::new(DriverBackgroundState::default()));
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct DriverBackgroundJob {
+    id: String,
+    job_type: String,
+    keys: Vec<String>,
+    created_unix: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct DriverBackgroundState {
+    initialized: bool,
+    enabled: bool,
+    running: bool,
+    worker_alive: bool,
+    current: Option<DriverBackgroundJob>,
+    queue: Vec<DriverBackgroundJob>,
+    last_run_unix: Option<u64>,
+    last_result: Option<String>,
+    history: Vec<String>,
+}
+
+impl Default for DriverBackgroundState {
+    fn default() -> Self {
+        Self {
+            initialized: false,
+            enabled: false,
+            running: false,
+            worker_alive: false,
+            current: None,
+            queue: Vec::new(),
+            last_run_unix: None,
+            last_result: None,
+            history: Vec::new(),
+        }
+    }
+}
+
+fn driver_bg_now() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0)
+}
+
+fn driver_bg_state_path() -> std::path::PathBuf {
+    let base = std::env::var("APPDATA")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|_| std::path::PathBuf::from("C:\\ProgramData"));
+    let dir = base.join("ConfUtils");
+    let _ = std::fs::create_dir_all(&dir);
+    dir.join("driver_background_state.json")
+}
+
+fn load_driver_bg_state_from_disk() -> DriverBackgroundState {
+    let path = driver_bg_state_path();
+    if let Ok(raw) = std::fs::read_to_string(path) {
+        if let Ok(mut parsed) = serde_json::from_str::<DriverBackgroundState>(&raw) {
+            parsed.initialized = true;
+            parsed.running = false;
+            parsed.current = None;
+            parsed.worker_alive = false;
+            return parsed;
+        }
+    }
+    DriverBackgroundState {
+        initialized: true,
+        ..DriverBackgroundState::default()
+    }
+}
+
+fn persist_driver_bg_state(state: &DriverBackgroundState) {
+    let path = driver_bg_state_path();
+    if let Ok(raw) = serde_json::to_string_pretty(state) {
+        let _ = std::fs::write(path, raw);
+    }
+}
+
+async fn ensure_driver_bg_loaded() {
+    let mut state = DRIVER_BG_STATE.lock().await;
+    if state.initialized {
+        return;
+    }
+    *state = load_driver_bg_state_from_disk();
+}
+
+fn driver_scan_script() -> &'static str {
+    "$s=New-Object -ComObject Microsoft.Update.Session;$searcher=$s.CreateUpdateSearcher();$res=$searcher.Search(\"IsInstalled=0 and Type='Driver' and IsHidden=0\");$rows=@();foreach($u in $res.Updates){$rows+=[PSCustomObject]@{title=[string]$u.Title;id=[string]$u.Identity.UpdateID;rev=[int]$u.Identity.RevisionNumber;size=[int64]$u.MaxDownloadSize}};$rows|ConvertTo-Json -Depth 6 -Compress"
+}
+
+fn driver_install_script_all() -> &'static str {
+    "$s=New-Object -ComObject Microsoft.Update.Session;$searcher=$s.CreateUpdateSearcher();$res=$searcher.Search(\"IsInstalled=0 and Type='Driver' and IsHidden=0\");$coll=New-Object -ComObject Microsoft.Update.UpdateColl;foreach($u in $res.Updates){if(-not $u.EulaAccepted){try{$u.AcceptEula()|Out-Null}catch{}};[void]$coll.Add($u)};if($coll.Count -eq 0){@{selected=0;installed=0;failed=0;rebootRequired=$false}|ConvertTo-Json -Compress;exit};$downloader=$s.CreateUpdateDownloader();$downloader.Updates=$coll;$null=$downloader.Download();$installer=$s.CreateUpdateInstaller();$installer.Updates=$coll;$ires=$installer.Install();$ok=0;$fail=0;for($i=0;$i -lt $coll.Count;$i++){$r=$ires.GetUpdateResult($i);if($r.ResultCode -eq 2 -or $r.ResultCode -eq 3){$ok++}elseif($r.ResultCode -ge 4){$fail++}};@{selected=$coll.Count;installed=$ok;failed=$fail;rebootRequired=[bool]$ires.RebootRequired}|ConvertTo-Json -Compress"
+}
+
+fn ps_quote(s: &str) -> String {
+    format!("'{}'", s.replace('\'', "''"))
+}
+
+fn driver_install_script_selected(keys: &[String]) -> String {
+    let arr = keys
+        .iter()
+        .map(|k| ps_quote(k))
+        .collect::<Vec<String>>()
+        .join(",");
+    format!("$wanted=@({});$s=New-Object -ComObject Microsoft.Update.Session;$searcher=$s.CreateUpdateSearcher();$res=$searcher.Search(\"IsInstalled=0 and Type='Driver' and IsHidden=0\");$coll=New-Object -ComObject Microsoft.Update.UpdateColl;foreach($u in $res.Updates){{$k=([string]$u.Identity.UpdateID+'|'+[string]$u.Identity.RevisionNumber);if($wanted -contains $k){{if(-not $u.EulaAccepted){{try{{$u.AcceptEula()|Out-Null}}catch{{}}}};[void]$coll.Add($u)}}}};if($coll.Count -eq 0){{@{{selected=0;installed=0;failed=0;rebootRequired=$false}}|ConvertTo-Json -Compress;exit}};$downloader=$s.CreateUpdateDownloader();$downloader.Updates=$coll;$null=$downloader.Download();$installer=$s.CreateUpdateInstaller();$installer.Updates=$coll;$ires=$installer.Install();$ok=0;$fail=0;for($i=0;$i -lt $coll.Count;$i++){{$r=$ires.GetUpdateResult($i);if($r.ResultCode -eq 2 -or $r.ResultCode -eq 3){{$ok++}}elseif($r.ResultCode -ge 4){{$fail++}}}};@{{selected=$coll.Count;installed=$ok;failed=$fail;rebootRequired=[bool]$ires.RebootRequired}}|ConvertTo-Json -Compress", arr)
+}
+
+async fn run_driver_bg_job(job: &DriverBackgroundJob) -> Result<String, String> {
+    match job.job_type.as_str() {
+        "scan_official" => run_powershell_no_rate_limit(driver_scan_script().to_string()).await,
+        "install_all" => run_powershell_no_rate_limit(driver_install_script_all().to_string()).await,
+        "install_selected" => {
+            if job.keys.is_empty() {
+                return Err("install_selected requires key list".to_string());
+            }
+            run_powershell_no_rate_limit(driver_install_script_selected(&job.keys)).await
+        }
+        _ => Err(format!("Unknown background job: {}", job.job_type)),
+    }
+}
+
+async fn ensure_driver_bg_worker() {
+    ensure_driver_bg_loaded().await;
+    {
+        let mut state = DRIVER_BG_STATE.lock().await;
+        if state.worker_alive {
+            return;
+        }
+        state.worker_alive = true;
+    }
+    tokio::spawn(async move {
+        loop {
+            let maybe_job = {
+                let mut state = DRIVER_BG_STATE.lock().await;
+                if !state.enabled {
+                    state.running = false;
+                    state.current = None;
+                    persist_driver_bg_state(&state);
+                    None
+                } else if state.queue.is_empty() {
+                    state.running = false;
+                    state.current = None;
+                    persist_driver_bg_state(&state);
+                    None
+                } else {
+                    let job = state.queue.remove(0);
+                    state.running = true;
+                    state.current = Some(job.clone());
+                    persist_driver_bg_state(&state);
+                    Some(job)
+                }
+            };
+
+            if let Some(job) = maybe_job {
+                let result = run_driver_bg_job(&job).await;
+                let mut state = DRIVER_BG_STATE.lock().await;
+                state.running = false;
+                state.current = None;
+                state.last_run_unix = Some(driver_bg_now());
+                let summary = match result {
+                    Ok(raw) => {
+                        let short = if raw.len() > 350 {
+                            format!("{}...", &raw[..350])
+                        } else {
+                            raw
+                        };
+                        format!("[OK:{}] {}", job.job_type, short)
+                    }
+                    Err(e) => format!("[ERR:{}] {}", job.job_type, e),
+                };
+                state.last_result = Some(summary.clone());
+                state.history.insert(0, summary);
+                if state.history.len() > 80 {
+                    state.history.truncate(80);
+                }
+                persist_driver_bg_state(&state);
+            } else {
+                tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+            }
+        }
+    });
 }
 
 #[tauri::command]
@@ -6344,4 +6528,62 @@ pub async fn install_translucenttb() -> Result<String, String> {
 pub async fn set_taskbar_appearance(mode: String, color: String, opacity: u8) -> Result<String, String> {
     taskbar::set_taskbar_appearance(mode, color, opacity)?;
     Ok("Taskbar appearance applied".to_string())
+}
+
+#[tauri::command]
+pub async fn set_driver_background_enabled(enabled: bool) -> Result<String, String> {
+    ensure_driver_bg_loaded().await;
+    {
+        let mut state = DRIVER_BG_STATE.lock().await;
+        state.enabled = enabled;
+        persist_driver_bg_state(&state);
+    }
+    ensure_driver_bg_worker().await;
+    Ok(if enabled {
+        "Driver background worker enabled".to_string()
+    } else {
+        "Driver background worker disabled".to_string()
+    })
+}
+
+#[tauri::command]
+pub async fn enqueue_driver_background_job(
+    job_type: String,
+    keys: Option<Vec<String>>,
+) -> Result<String, String> {
+    ensure_driver_bg_loaded().await;
+    let allowed = ["scan_official", "install_selected", "install_all"];
+    if !allowed.contains(&job_type.as_str()) {
+        return Err("Invalid job type".to_string());
+    }
+    let now = driver_bg_now();
+    let job = DriverBackgroundJob {
+        id: format!("{}_{}", now, job_type),
+        job_type: job_type.clone(),
+        keys: keys.unwrap_or_default(),
+        created_unix: now,
+    };
+    {
+        let mut state = DRIVER_BG_STATE.lock().await;
+        state.queue.push(job);
+        persist_driver_bg_state(&state);
+    }
+    ensure_driver_bg_worker().await;
+    Ok(format!("Queued {}", job_type))
+}
+
+#[tauri::command]
+pub async fn clear_driver_background_jobs() -> Result<String, String> {
+    ensure_driver_bg_loaded().await;
+    let mut state = DRIVER_BG_STATE.lock().await;
+    state.queue.clear();
+    persist_driver_bg_state(&state);
+    Ok("Background queue cleared".to_string())
+}
+
+#[tauri::command]
+pub async fn get_driver_background_status() -> Result<String, String> {
+    ensure_driver_bg_loaded().await;
+    let state = DRIVER_BG_STATE.lock().await;
+    serde_json::to_string(&*state).map_err(|e| format!("Failed to serialize status: {}", e))
 }

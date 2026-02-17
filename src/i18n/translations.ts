@@ -1,4 +1,12 @@
-﻿export const translations = {
+﻿import { tr as tr1 } from './tr';
+import { tr2 } from './tr2';
+import { tr3 } from './tr3';
+import { tr4 } from './tr4';
+import { tr5 } from './tr5';
+import { trFeatures } from './tr_features';
+import { trTweaks } from './tr_tweaks';
+
+export const translations = {
   en: {
     app_name: 'ConfUtils',
     app_version: 'v2.1.33',
@@ -19,6 +27,7 @@
     nav_backup: 'Backup',
     nav_goodbyedpi: 'GoodbyeDPI',
     nav_discord: 'Discord',
+    nav_driver_hub: 'Driver Hub',
 
     discord_title: 'Discord Tools',
     discord_subtitle: 'Server management and cloning utilities',
@@ -291,6 +300,34 @@
     system_monitor_title: 'System Monitor',
     system_monitor_subtitle: 'Real-time system performance metrics',
     top_processes_cpu: 'Top Processes by CPU',
+    driver_hub_title: 'Driver & Firmware Hub',
+    driver_hub_subtitle: 'Scan outdated drivers, check device issues, and review firmware details',
+    driver_hub_scan_now: 'Scan Now',
+    driver_hub_scan_complete: 'Driver Scan Complete',
+    driver_hub_scan_complete_desc: 'Driver and firmware information updated',
+    driver_hub_scan_failed: 'Driver scan failed',
+    driver_hub_last_scan: 'Last scan',
+    driver_hub_open_device_manager: 'Open Device Manager',
+    driver_hub_opening_device_manager: 'Opening Device Manager...',
+    driver_hub_open_windows_update: 'Open Windows Update',
+    driver_hub_opening_windows_update: 'Opening Windows Update...',
+    driver_hub_action_failed: 'Action failed',
+    driver_hub_device_issues: 'Device Issues',
+    driver_hub_issues_desc: 'Devices reporting error status in Device Manager',
+    driver_hub_outdated_drivers: 'Outdated Drivers',
+    driver_hub_outdated_desc: 'Drivers older than 2 years that may need updates',
+    driver_hub_firmware_overview: 'Firmware Overview',
+    driver_hub_firmware_desc: 'BIOS and motherboard baseline details',
+    driver_hub_bios_vendor: 'BIOS Vendor',
+    driver_hub_bios_date: 'BIOS Date',
+    driver_hub_board_vendor: 'Board Vendor',
+    driver_hub_board_model: 'Board Model',
+    driver_hub_driver_date: 'Driver Date',
+    driver_hub_driver_age: 'Age',
+    driver_hub_official: 'Official',
+    driver_hub_search: 'Search',
+    driver_hub_no_outdated: 'No outdated drivers were detected',
+    driver_hub_no_issues: 'No device issues were detected',
 
     privacy_center_title: 'Privacy Center',
     privacy_center_subtitle: 'Control what Windows collects and shares about you',
@@ -1108,9 +1145,21 @@
     apps_installed_failed: 'Install check failed',
 
     recommended: 'Recommended',
-    downloading: 'Downloading...'
+    downloading: 'Downloading...',
+    settings_block_language_title: 'Language',
+    settings_block_language_desc: 'Choose your preferred display language.',
+    settings_status_language_en: 'English',
+    settings_status_language_tr: 'Türkçe'
+  },
+  tr: {
+    ...tr1,
+    ...tr2,
+    ...tr3,
+    ...tr4,
+    ...tr5,
+    ...trFeatures,
+    ...trTweaks
   }
-
 } as const;
 
 export type LanguageCode = keyof typeof translations;

@@ -248,6 +248,10 @@ fn main() {
             commands::clear_discord_rpc,
             commands::set_taskbar_appearance,
             commands::install_translucenttb,
+            commands::set_driver_background_enabled,
+            commands::enqueue_driver_background_job,
+            commands::clear_driver_background_jobs,
+            commands::get_driver_background_status,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

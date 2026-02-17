@@ -135,7 +135,7 @@ const getRiskLevel = (category?: string) => {
 };
 
 export default function AdvancedTweaks({ showToast, compact, externalQuery }: AdvancedTweaksProps) {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState('all');
   const [processing, setProcessing] = useState<Record<string, boolean>>({});
@@ -150,6 +150,20 @@ export default function AdvancedTweaks({ showToast, compact, externalQuery }: Ad
   const categoryLabel = (value?: string) => {
     const raw = (value || 'Other').replace(/^z__+/i, '').replace(/_/g, ' ').trim();
     return raw || 'Other';
+  };
+
+  const getTitle = (id: string, value: string = '') => {
+    if (lang === 'en') return value;
+    const key = `tweak_${id}_title`;
+    const val = t(key as any);
+    return val === key ? value : val;
+  };
+
+  const getDesc = (id: string, value: string = '') => {
+    if (lang === 'en') return value;
+    const key = `tweak_${id}_desc`;
+    const val = t(key as any);
+    return val === key ? value : val;
   };
 
   const categories = useMemo(() => {
@@ -171,14 +185,14 @@ export default function AdvancedTweaks({ showToast, compact, externalQuery }: Ad
         _category: (tweak.category || 'Other').replace(/^z__+/i, '').replace(/_/g, ' ')
       }))
       .filter((t) => (category === 'all' ? true : t._category === category))
-      .filter((t) =>
-        q
-          ? (t.Content || '').toLowerCase().includes(q) ||
-            (t.Description || '').toLowerCase().includes(q)
-          : true
-      )
+      .filter((t) => {
+        const title = getTitle(t.id, t.Content);
+        const desc = getDesc(t.id, t.Description);
+        if (!q) return true;
+        return (title || '').toLowerCase().includes(q) || (desc || '').toLowerCase().includes(q);
+      })
       .sort((a, b) => (a.Order || '').localeCompare(b.Order || ''));
-  }, [query, category]);
+  }, [query, category, lang]);
 
   const grouped = useMemo(() => {
     const map = new Map<string, typeof list>();
@@ -202,7 +216,7 @@ export default function AdvancedTweaks({ showToast, compact, externalQuery }: Ad
       const cmd = buildCommand(tweak, undo);
       if (!cmd) throw new Error('No script to run');
       await invoke('run_powershell', { command: cmd });
-      showToast('success', t('tweaks_done' as any), tweak.Content);
+      showToast('success', t('tweaks_done' as any), getTitle(id, tweak.Content));
       setStatus((prev) => ({ ...prev, [id]: undo ? 'ready' : 'applied' }));
     } catch (err: any) {
       showToast('error', t('tweaks_failed' as any), String(err));
@@ -234,10 +248,10 @@ export default function AdvancedTweaks({ showToast, compact, externalQuery }: Ad
     <div>
       {!compact && (
         <div className="mb-lg">
-        <h2 style={{ fontSize: 'var(--text-2xl)', fontWeight: 600, color: 'var(--text-100)' }}>
-          {t('advanced_tweaks_title' as any)}
-        </h2>
-        <p className="text-muted mt-sm">{t('advanced_tweaks_subtitle' as any)}</p>
+          <h2 style={{ fontSize: 'var(--text-2xl)', fontWeight: 600, color: 'var(--text-100)' }}>
+            {t('advanced_tweaks_title' as any)}
+          </h2>
+          <p className="text-muted mt-sm">{t('advanced_tweaks_subtitle' as any)}</p>
         </div>
       )}
 
@@ -280,59 +294,64 @@ export default function AdvancedTweaks({ showToast, compact, externalQuery }: Ad
                   statusValue === 'applied'
                     ? t('tweak_status_applied' as any)
                     : statusValue === 'ready'
-                    ? t('tweak_status_ready' as any)
-                    : statusValue === 'checking'
-                    ? t('tweak_status_processing' as any)
-                    : t('tweaks_status_unknown' as any);
+                      ? t('tweak_status_ready' as any)
+                      : statusValue === 'checking'
+                        ? t('tweak_status_processing' as any)
+                        : t('tweaks_status_unknown' as any);
                 const riskLabel =
                   risk === 'high' ? t('risk_high' as any) : risk === 'medium' ? t('risk_medium' as any) : t('risk_low' as any);
                 const riskClass = risk === 'high' ? 'error' : risk === 'medium' ? 'warning' : '';
+
+                const title = getTitle(item.id, item.Content);
+                const desc = getDesc(item.id, item.Description);
+
                 return (
-                <div key={item.id} className="control-card">
-                  <div className="card-header">
-                    <div className="card-icon-wrapper cyan">
-                      <Filter size={22} />
+                  <div key={item.id} className="control-card">
+                    <div className="card-header">
+                      <div className="card-icon-wrapper cyan">
+                        <Filter size={22} />
+                      </div>
+                      <div className="flex items-center gap-sm">
+                        <div className={`card-status ${riskClass}`}>
+                          <span className="card-status-dot" />
+                          {riskLabel}
+                        </div>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-sm">
-                      <div className={`card-status ${riskClass}`}>
-                        <span className="card-status-dot" />
-                        {riskLabel}
+                    <h3 className="card-title">{title}</h3>
+                    <p className="card-description">{desc}</p>
+                    <div className="card-footer">
+                      <span className="card-meta">{statusLabel}</span>
+                      <div className="flex gap-sm">
+                        <button
+                          className="btn btn-ghost"
+                          onClick={() => checkStatus(item.id)}
+                          disabled={statusValue === 'checking' || !!processing[item.id]}
+                        >
+                          <CheckCircle size={14} />
+                          {t('tweaks_check' as any)}
+                        </button>
+                        <button
+                          className="btn btn-ghost"
+                          onClick={() => run(item.id, true)}
+                          disabled={!!processing[item.id]}
+                        >
+                          <Undo2 size={14} />
+                          {t('tweaks_undo' as any)}
+                        </button>
+                        <button
+                          className="btn btn-primary"
+                          onClick={() => run(item.id, false)}
+                          disabled={!!processing[item.id]}
+                        >
+                          <Play size={14} />
+                          {processing[item.id] ? t('tweaks_applying' as any) : t('tweaks_apply' as any)}
+                        </button>
                       </div>
                     </div>
                   </div>
-                  <h3 className="card-title">{item.Content}</h3>
-                  <p className="card-description">{item.Description}</p>
-                  <div className="card-footer">
-                    <span className="card-meta">{statusLabel}</span>
-                    <div className="flex gap-sm">
-                      <button
-                        className="btn btn-ghost"
-                        onClick={() => checkStatus(item.id)}
-                        disabled={statusValue === 'checking' || !!processing[item.id]}
-                      >
-                        <CheckCircle size={14} />
-                        {t('tweaks_check' as any)}
-                      </button>
-                      <button
-                        className="btn btn-ghost"
-                        onClick={() => run(item.id, true)}
-                        disabled={!!processing[item.id]}
-                      >
-                        <Undo2 size={14} />
-                        {t('tweaks_undo' as any)}
-                      </button>
-                      <button
-                        className="btn btn-primary"
-                        onClick={() => run(item.id, false)}
-                        disabled={!!processing[item.id]}
-                      >
-                        <Play size={14} />
-                        {processing[item.id] ? t('tweaks_applying' as any) : t('tweaks_apply' as any)}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )})}
+                )
+              })}
             </div>
           </div>
         ))}

@@ -7,6 +7,7 @@ import {
   Settings,
   Wifi,
   Activity,
+  Cpu,
   Wrench,
   Database,
   Info,
@@ -29,6 +30,7 @@ import './styles/premium.css';
 import { useI18n } from './i18n/I18nContext';
 import { open } from '@tauri-apps/plugin-shell';
 import { getCurrentWindow } from '@tauri-apps/api/window';
+import { invoke } from '@tauri-apps/api/core';
 import tweaksData from './premium/data/toolbox_tweaks.json';
 import appsData from './premium/data/toolbox_applications.json';
 import featuresData from './premium/data/toolbox_features.json';
@@ -50,6 +52,7 @@ const UpdatesPage = lazy(() => import('./premium/pages/Updates'));
 const BackupPage = lazy(() => import('./premium/pages/Backup'));
 const GoodbyeDPIPage = lazy(() => import('./premium/pages/GoodbyeDPI'));
 const DiscordPage = lazy(() => import('./premium/pages/Discord'));
+const DriverFirmwarePage = lazy(() => import('./premium/pages/DriverFirmware'));
 
 const SettingsPage = lazy(() => import('./premium/pages/Settings'));
 const AboutPage = lazy(() => import('./premium/pages/About'));
@@ -64,6 +67,13 @@ type SearchResult = {
   description?: string;
 };
 
+type CpuUsagePayload = { Usage?: number };
+type MemoryUsagePayload = { Percent?: number };
+type DiskInfoPayload = {
+  SizeGB?: number;
+  UsedSpaceGB?: number;
+};
+
 // Navigation structure
 const navGroups: NavGroup[] = [
   {
@@ -71,6 +81,7 @@ const navGroups: NavGroup[] = [
     items: [
       { id: 'dashboard', labelKey: 'nav_dashboard', icon: LayoutDashboard },
       { id: 'monitor', labelKey: 'nav_monitor', icon: Activity },
+      { id: 'drivers', labelKey: 'nav_driver_hub', icon: Cpu },
     ]
   },
   {
@@ -237,18 +248,76 @@ function PremiumApp() {
     open(latestUrl);
   };
 
-  // Simulate system health check
+  const safeJson = <T,>(raw: unknown, fallback: T): T => {
+    if (typeof raw !== 'string') return (raw as T) ?? fallback;
+    try {
+      return JSON.parse(raw) as T;
+    } catch {
+      return fallback;
+    }
+  };
+
+  const getHealthStatus = (cpuUsage: number, memoryUsage: number, diskUsage: number): 'good' | 'warning' | 'critical' => {
+    if (cpuUsage >= 90 || memoryUsage >= 90 || diskUsage >= 95) {
+      return 'critical';
+    }
+    if (cpuUsage >= 75 || memoryUsage >= 80 || diskUsage >= 90) {
+      return 'warning';
+    }
+    return 'good';
+  };
+
+  // Real system health check
   useEffect(() => {
-    const checkHealth = () => {
-      const random = Math.random();
-      if (random > 0.9) setSystemHealth('critical');
-      else if (random > 0.7) setSystemHealth('warning');
-      else setSystemHealth('good');
+    let active = true;
+
+    const checkHealth = async () => {
+      try {
+        const [cpuRaw, memoryRaw, diskRaw] = await Promise.all([
+          invoke('get_cpu_usage'),
+          invoke('get_memory_usage'),
+          invoke('get_disk_info')
+        ]);
+
+        const cpu = safeJson<CpuUsagePayload>(cpuRaw, { Usage: 0 });
+        const memory = safeJson<MemoryUsagePayload>(memoryRaw, { Percent: 0 });
+        const diskData = safeJson<DiskInfoPayload[] | DiskInfoPayload>(diskRaw, []);
+        const disks = Array.isArray(diskData) ? diskData : [diskData];
+
+        const totals = disks.reduce(
+          (acc, disk) => {
+            acc.used += Number(disk.UsedSpaceGB || 0);
+            acc.total += Number(disk.SizeGB || 0);
+            return acc;
+          },
+          { used: 0, total: 0 }
+        );
+
+        const diskUsage = totals.total > 0 ? (totals.used / totals.total) * 100 : 0;
+        const status = getHealthStatus(
+          Number(cpu.Usage || 0),
+          Number(memory.Percent || 0),
+          diskUsage
+        );
+
+        if (active) {
+          setSystemHealth(status);
+        }
+      } catch (error) {
+        console.error('System health check failed:', error);
+        if (active) {
+          setSystemHealth('warning');
+        }
+      }
     };
 
     checkHealth();
     const interval = setInterval(checkHealth, 30000);
-    return () => clearInterval(interval);
+
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
   }, []);
 
   // Toast management
@@ -372,6 +441,17 @@ function PremiumApp() {
       }
     });
 
+    const driverItems = [
+      { id: 'outdated', title: t('driver_hub_outdated_drivers' as any), description: t('driver_hub_outdated_desc' as any) },
+      { id: 'issues', title: t('driver_hub_device_issues' as any), description: t('driver_hub_issues_desc' as any) },
+      { id: 'firmware', title: t('driver_hub_firmware_overview' as any), description: t('driver_hub_firmware_desc' as any) }
+    ];
+    driverItems.forEach((item) => {
+      if (match(item.title) || match(item.description)) {
+        results.push({ id: `drivers-${item.id}`, page: 'drivers', title: item.title, description: item.description });
+      }
+    });
+
 
     return results.slice(0, 50);
   }, [normalizedQuery, t]);
@@ -390,6 +470,7 @@ function PremiumApp() {
       network: t('nav_network' as any),
       discord: t('nav_discord' as any),
       updates: t('nav_updates' as any),
+      drivers: t('nav_driver_hub' as any),
     };
     const map = new Map<string, SearchResult[]>();
     searchResults.forEach((result) => {
@@ -417,6 +498,7 @@ function PremiumApp() {
     const titles: Record<string, string> = {
       dashboard: t('nav_dashboard' as any),
       monitor: t('nav_monitor' as any),
+      drivers: t('nav_driver_hub' as any),
       tweaks: t('nav_tweaks' as any),
       features: t('nav_features' as any),
       updates: t('nav_updates' as any),
@@ -442,6 +524,8 @@ function PremiumApp() {
         return <DashboardPage {...pageProps} onNavigate={setActivePage} />;
       case 'monitor':
         return <SystemMonitorPage {...pageProps} />;
+      case 'drivers':
+        return <DriverFirmwarePage {...pageProps} />;
       case 'tweaks':
         return <TweaksPage {...pageProps} externalQuery={pageSearch.tweaks} />;
       case 'features':
@@ -588,15 +672,21 @@ function PremiumApp() {
       </aside>
 
       {/* Main Content */}
-      <main className="main-area">
-        {/* Header */}
-        <header className="header-bar">
-          <div className="header-left">
-            <h1 className="page-title">{getPageTitle()}</h1>
-            <div className="breadcrumb">
-              <span>{t('breadcrumb_home' as any)}</span>
-              <ChevronRight size={14} className="breadcrumb-divider" />
-              <span style={{ color: 'var(--text-90)' }}>{getPageTitle()}</span>
+        <main className="main-area">
+          {/* Header */}
+          <header className="header-bar">
+            <div className="header-left">
+              <img
+                className="app-logo"
+                src="/app-icon.svg"
+                alt="ConfUtils"
+                draggable={false}
+              />
+              <h1 className="page-title">{getPageTitle()}</h1>
+              <div className="breadcrumb">
+                <span>{t('breadcrumb_home' as any)}</span>
+                <ChevronRight size={14} className="breadcrumb-divider" />
+                <span style={{ color: 'var(--text-90)' }}>{getPageTitle()}</span>
             </div>
           </div>
 

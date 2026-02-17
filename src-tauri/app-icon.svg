@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="outerGlow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse"
+      gradientTransform="translate(512 512) rotate(90) scale(520)">
+      <stop offset="0.66" stop-color="#00E7FF" stop-opacity="0.0"/>
+      <stop offset="0.88" stop-color="#00E7FF" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#00B8FF" stop-opacity="0.0"/>
+    </radialGradient>
+
+    <linearGradient id="ring" x1="210" y1="140" x2="860" y2="900" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#00E7FF"/>
+      <stop offset="0.55" stop-color="#39F4FF"/>
+      <stop offset="1" stop-color="#00B8FF"/>
+    </linearGradient>
+
+    <linearGradient id="octBorder" x1="240" y1="220" x2="820" y2="830" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#35F0FF"/>
+      <stop offset="1" stop-color="#1AB7C5"/>
+    </linearGradient>
+
+    <linearGradient id="face" x1="300" y1="280" x2="760" y2="780" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#0E2B33"/>
+      <stop offset="0.55" stop-color="#071A21"/>
+      <stop offset="1" stop-color="#031117"/>
+    </linearGradient>
+
+    <linearGradient id="cStroke" x1="330" y1="320" x2="710" y2="720" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#E6FFFF"/>
+      <stop offset="0.7" stop-color="#B9FFF4"/>
+      <stop offset="1" stop-color="#8FFFEA"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Outer glowing ring -->
+  <circle cx="512" cy="512" r="462" fill="none" stroke="url(#outerGlow)" stroke-width="110"/>
+  <circle cx="512" cy="512" r="448" fill="none" stroke="url(#ring)" stroke-width="22" opacity="0.95"/>
+
+  <!-- Badge octagon -->
+  <polygon
+    points="512,170 770,274 854,512 770,750 512,854 254,750 170,512 254,274"
+    fill="url(#face)"
+    stroke="url(#octBorder)"
+    stroke-width="22"
+    stroke-linejoin="round"
+  />
+  <polygon
+    points="512,214 742,306 814,512 742,718 512,810 282,718 210,512 282,306"
+    fill="none"
+    stroke="#0A3A43"
+    stroke-width="14"
+    stroke-linejoin="round"
+    opacity="0.9"
+  />
+
+  <!-- The "C" mark -->
+  <path
+    d="M 675 318 A 258 258 0 1 0 675 706"
+    fill="none"
+    stroke="url(#cStroke)"
+    stroke-width="122"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+</svg>
